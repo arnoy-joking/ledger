@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- Existing scripts for video and XLSX handling -->
+  <script type="text/javascript">
+    var gk_isXlsx = false;
+    var gk_xlsxFileLookup = {};
+    var gk_fileData = {};
+    function filledCell(cell) {
+      return cell !== '' && cell != null;
+    }
+    function loadFileData(filename) {
+      if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+        try {
+          var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+          var firstSheetName = workbook.SheetNames[0];
+          var worksheet = workbook.Sheets[firstSheetName];
+          var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+          var filteredData = jsonData.filter(row => row.some(filledCell));
+          var headerRowIndex = filteredData.findIndex((row, index) =>
+            row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+          );
+          if (headerRowIndex === -1 || headerRowIndex > 25) headerRowIndex = 0;
+          var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex));
+          csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+          return csv;
+        } catch (e) {
+          console.error(e);
+          return "";
+        }
+      }
+      return gk_fileData[filename] || "";
+    }
+  </script>
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>পড় মন দিয়া</title>
+  <link rel="icon" href="https://cdn-icons-png.freepik.com/512/7856/7856382.png" type="image/png">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <link href="https://cdn.plyr.io/3.7.8/plyr.css" rel="stylesheet">
+ <style>
+  /* Base Styles */
+  html, body {
+    margin: 0;
+    padding: 0;
+    /* Use a clean, sans-serif font */
+    font-family: 'Poppins', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #171717; /* Very dark background */
+    color: #e0e0e0; /* Light text color */
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  /* Header/Navbar Area */
+  header {
+    background-color: #171717; /* Background remains dark */
+    /* Remove padding and margin specific to the header to make it full width */
+    padding: 0;
+    margin: 0;
+    max-width: 100%;
+    width: 100%;
+    box-sizing: border-box;
+    /* Add padding for the content inside */
+    padding: 1rem 2rem; 
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #282828; /* Subtle bottom border */
+  }
+  
+  /* Logo/Title area styling (e.g., if there's a title with specific colors) */
+  .logo-text {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #f0f0f0;
+    display: flex;
+    align-items: center;
+  }
+
+  /* Main Content Layout (simulating a two-column or split layout) */
+  .main-content-container {
+    display: flex;
+    gap: 1.5rem;
+    padding: 1.5rem 2rem;
+    max-width: 1200px; /* Max width for content */
+    margin: 0 auto;
+  }
+
+  /* Left Panel: Live Class (Video Player and Buttons) */
+  .live-class-panel {
+    flex: 3; /* Takes up more space */
+  }
+
+  /* Right Panel: Class List */
+  .class-list-panel {
+    flex: 1.2; /* Takes up less space */
+    min-width: 300px;
+    background-color: #212121; /* Slightly lighter background for the list container */
+    border-radius: 0.5rem;
+    padding: 1rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+
+  /* Card/Container styles (e.g., the video player container) */
+  .bg-white {
+    /* Used for the overall container in the image, e.g., surrounding the player */
+    background-color: #212121 !important; 
+    border: none; /* No border visible in the image */
+    border-radius: 0.5rem;
+    padding: 0; /* Remove internal padding to allow player to touch edges */
+    margin-bottom: 1.5rem;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  }
+
+  /* Headings for the sections */
+  .section-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #55aaff; /* Blue color for the section title (Live Class / Class List) */
+    display: flex;
+    align-items: center;
+    padding: 0 1rem 0.5rem;
+  }
+  
+  .class-list-panel .section-title {
+    padding: 0 0 0.5rem 0; /* Adjust padding for the list panel */
+  }
+
+  /* Text Colors/Sizes */
+  .text-gray-100, .text-lg {
+    color: #e0e0e0 !important;
+  }
+
+  /* Class List Styles */
+  #classList {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  #classList li {
+    color: #e0e0e0;
+    padding: 0.75rem 1rem;
+    border-radius: 0.4rem;
+    background-color: transparent; /* Default transparent */
+    margin-bottom: 0.3rem;
+    transition: background-color 0.2s ease;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.95rem;
+    font-weight: 500;
+  }
+  
+  /* Style for the active/selected class item */
+  #classList li:first-child { 
+    background-color: #0b1f3c; /* Dark blue background for selected item */
+    color: #55aaff; /* Blue text color for selected item */
+  }
+
+  #classList li:not(:first-child):hover {
+    background-color: #2b2b2b; /* Hover for non-selected items */
+  }
+  
+  .list-item-icon {
+    color: #e0e0e0; /* Default icon color */
+  }
+  
+  #classList li:first-child .list-item-icon {
+    color: #55aaff; /* Blue icon color for selected item */
+  }
+
+
+  /* Button Styles (Download PDF & Open on YouTube) */
+  .button-group {
+    display: flex;
+    gap: 1rem;
+    padding: 1rem;
+  }
+
+  .download-pdf-button, .open-youtube-button {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.4rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    border: none;
+    font-size: 1rem;
+  }
+
+  .download-pdf-button {
+    background-color: #38a169; /* Green background */
+    color: #fff;
+  }
+  
+  .download-pdf-button:hover {
+    background-color: #2f855a;
+  }
+
+  .open-youtube-button {
+    background-color: #55aaff; /* Blue background */
+    color: #fff;
+  }
+  
+  .open-youtube-button:hover {
+    background-color: #4499ee;
+  }
+
+  /* Ensure video player container matches background */
+  .plyr {
+    border-radius: 0.5rem;
+    background-color: #212121; /* Match main container background */
+    overflow: hidden;
+    max-width: 100%;
+  }
+
+  /* Footer/Quote Area */
+  .footer-quotes {
+    font-size: 0.85rem;
+    color: #888;
+    text-align: right; /* Match alignment in the image */
+    margin-top: 0;
+    padding: 0 1rem 1rem;
+  }
+
+  .footer-quotes p {
+    margin: 0.4rem 0;
+  }
+
+  /* Hide elements not present in the image */
+  header {
+    /* Assuming header has the logo and the quote on the right */
+    background-color: #171717;
+  }
+  
+  .bg-blue-200 { /* Not explicitly visible in the final desired look */
+    display: none !important;
+  }
+  
+  .text-red-500 {
+    color: #e74c3c; /* A deep red for contrast, if used */
+  }
+  
+  .shadow-md {
+    /* Use for any remaining general shadow/border elements */
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+  
+  h1, h2, footer { /* Hide or style elements not matching the image's structure */
+    display: none; /* Hide generic headers/footers if they clash with the image */
+  }
+
+  /* Media Queries for Responsiveness */
+  @media (max-width: 1024px) {
+    .main-content-container {
+      flex-direction: column;
+      padding: 1rem;
+    }
+    
+    .live-class-panel, .class-list-panel {
+      flex: none;
+      min-width: unset;
+    }
+  }
+
+  @media (max-width: 768px) {
+    header {
+      padding: 0.75rem 1rem;
+    }
+    
+    .button-group {
+      flex-direction: column;
+    }
+
+    .download-pdf-button, .open-youtube-button {
+      font-size: 0.9rem;
+      padding: 0.6rem 1rem;
+    }
+    
+    .section-title {
+      padding: 0 0.5rem 0.5rem;
+    }
+  }
+</style>
+
+</head>
+<body class="font-sans">
+  <header class="bg-black text-white p-4 flex items-center">
+    <img src="https://bondipathshala.com.bd/files/logo.png" alt="Bondi Pathshala Logo" class="h-10">
+    <h1 class="ml-4 text-xl font-bold">পড়ালেখা করা ভালো</h1>
+  </header>
+
+  <div class="container mx-auto p-4 flex flex-col lg:flex-row gap-4">
+    <div class="lg:w-3/4 bg-white rounded-lg shadow-md p-4">
+      <h2 class="text-lg font-semibold mb-4 text-gray-100">Live Class</h2>
+      <div style="position: relative;"> <!-- Wrapper for player and custom share button -->
+        <div id="player" data-plyr-provider="youtube" data-plyr-embed-id="RUQcm3vIbWo"></div>
+        <button id="customShareBtn" title="Share" style="position: absolute; top: 15px; right: 15px; z-index: 20; background: none; border: none; cursor: pointer; padding: 0;">
+          <i class="fas fa-share-alt" style="color: white; font-size: 20px; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.5));"></i>
+        </button>
+      </div>
+      <div class="flex space-x-4 mt-4">
+        <a id="downloadPdfBtn" href="https://www.bondipathshala.com.bd/pdf/20240527-1716748184-LRH05IsN.pdf" target="_blank" class="inline-block bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+          <i class="fas fa-file-pdf mr-2"></i>Download PDF
+        </a>
+        <button id="downloadEmojiBtn" class="download-emoji">
+          <i class="fas fa-smile mr-2"></i>Open on YouTube
+        </button>
+      </div>
+    </div>
+
+    <div class="lg:w-1/4 bg-white rounded-lg shadow-md p-4">
+      <button id="openAddVideoBtn" class="w-full bg-black text-white p-2 rounded mb-4 fake-button">
+        <i class="fas fa-plus mr-2"></i>Add New Class
+      </button>
+
+      <h2 class="text-lg font-semibold mb-4 text-gray-100">Class List</h2>
+      <ul id="classList" class="space-y-2 max-h-96 overflow-y-auto">
+       <li class="class-item p-2 rounded hover:bg-blue-100 cursor-pointer" data-vid="BzX25StCOyQ" data-nname="জৈব যৌগের ইতিহাস - পর্ব ০১" data-npdf="20250521-1747767276-zTUgBskf.pdf">
+  জৈব যৌগের ইতিহাস - পর্ব ০১ <i class="fas fa-file-pdf text-red-500 ml-2"></i>
+</li>
+<li class="class-item p-2 rounded hover:bg-blue-100 cursor-pointer" data-vid="a_tsletdZjs" data-nname="জৈব যৌগের ইতিহাস - পর্ব ০২" data-npdf="20250525-1748120787-RXz1vtTE.pdf">
+  জৈব যৌগের ইতিহাস - পর্ব ০২ <i class="fas fa-file-pdf text-red-500 ml-2"></i>
+</li>
+<li class="class-item p-2 rounded hover:bg-blue-100 cursor-pointer" data-vid="9055Ce-Ehd4" data-nname="জৈব যৌগের ইতিহাস  - পর্ব ০৩" data-npdf="20250526-1748209809-b0ltKw7V.pdf">
+  জৈব যৌগের ইতিহাস  - পর্ব ০৩ <i class="fas fa-file-pdf text-red-500 ml-2"></i>
+</li>
+<li class="class-item p-2 rounded hover:bg-blue-100 cursor-pointer" data-vid="CVCW92j2zSw" data-nname="জৈব যৌগ - পর্ব ০৪" data-npdf="20250529-1748503530-x3r34ooq.pdf">
+  জৈব যৌগের ইতিহাস - পর্ব ০৪ <i class="fas fa-file-pdf text-red-500 ml-2"></i>
+</li>
+<li class="class-item p-2 rounded hover:bg-blue-100 cursor-pointer" data-vid="XqMsgz9yTto" data-nname="জৈব যৌগ - পর্ব ০৫" data-npdf="20250530-1748546953-jhRBbO4q.pdf">
+  জৈব যৌগের ইতিহাস - পর্ব ০৫ <i class="fas fa-file-pdf text-red-500 ml-2"></i>
+</li>
+        <li class="class-item p-2 rounded hover:bg-blue-100 cursor-pointer" data-vid="vaF4aRwLdok">
+  জৈব রসায়ন - পর্ব ০৬
+</li>
+<li class="class-item p-2 rounded hover:bg-blue-100 cursor-pointer" data-vid="HqF4pBphbKM" data-nname="সমানুতা - পর্ব ০১" data-npdf="20250620-1750424001-AZt5hROq.pdf">
+  সমানুতা - পর্ব ০১ <i class="fas fa-file-pdf text-red-500 ml-2"></i>
+</li>
+      </ul>
+    </div>
+  </div>
+
+<footer class="bg-gray-900 text-white py-8 px-4 md:px-8 relative overflow-hidden">
+  <!-- Neon Glow Background Effect -->
+  <div class="absolute inset-0 bg-gradient-to-r from-pink-500/20 via-cyan-500/20 to-lime-500/20 animate-pulse"></div>
+  
+  <div class="container mx-auto grid grid-cols-1 md:grid-cols-3 gap-8 text-center md:text-left relative z-10">
+    <!-- Brand/Logo Section -->
+    <div>
+      <h2 class="text-3xl font-extrabold tracking-wider text-lime-400>Bondi Pathshala</h2>
+      <p class="mt-2 text-lime-300 t-medium">Bondi Pathshala</p>
+    </div>
+
+    <!-- Navigation Links -->
+    <div>
+      <h3 class="text-lg font-bold text-lime-400 mb-4 drop-shadow-[0_0_8px_rgba(132,204,22,0.6)]">মন ফ্রেশ থাকলে পড়া বেশি মনে থাকে!</h3>
+      <ul class="space-y-2 text-cyan-300 text-sm">
+  <li>পড়ায় ঝড় তুলো!</li>
+  <li>রঙিন নোট ফাটাও!</li>
+  <li> বই পড়ো!</li>
+      </ul>
+    </div>
+
+    <!-- Social Media & Contact -->
+    <div>
+      <h3 class="text-lg font-bold text-lime-400 mb-4 drop-shadow-[0_0_8px_rgba(132,204,22,0.6)]">Connect With Us</h3>
+      <div class="flex justify-center md:justify-start space-x-4 mb-4">
+        <a href="#" class="hover:scale-110 transform transition-transform duration-300 drop-shadow-[0_0_6px_rgba(236,72,153,0.5)]">
+          <svg class="w-6 h-6 fill-current text-cyan-300 hover:text-pink-400" viewBox="0 0 24 24">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/>
+          </svg>
+        </a>
+        <a href="#" class="hover:scale-110 transform transition-transform duration-300 drop-shadow-[0_0_6px_rgba(236,72,153,0.5)]">
+          <svg class="w-6 h-6 fill-current text-cyan-300 hover:text-pink-400" viewBox="0 0 24 24">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 14v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1h-6v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+          </svg>
+        </a>
+      </div>
+      <p class="text-cyan-300 text-sm font-medium">Email: <a href="mailto:arnoy799@gmail.com" class="hover:text-pink-400 transition-colors duration-300 hover:drop-shadow-[0_0_6px_rgba(236,72,153,0.5)]">arnoy799@gmail.com</a></p>
+    </div>
+  </div>
+
+  <!-- Bottom Bar -->
+  <div class="border-t border-pink-500/50 mt-8 pt-4 text-center text-cyan-300 text-sm font-medium">
+    <p>© 2025 Bondi Pathshala. All rights reserved.</p>
+  </div>
+</footer>
+
+<script src="https://cdn.plyr.io/3.7.8/plyr.polyfilled.js"></script>
+<script>
+  const player = new Plyr('#player', {
+    controls: ['play-large', 'rewind', 'play', 'fast-forward', 'progress', 'current-time', 'settings', 'pip', 'fullscreen'],
+    youtube: { noCookie: true, rel: 0, showinfo: 0, modestbranding: 1 },
+    settings: ['quality', 'speed'],
+    speed: { selected: 1, options: [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2] }
+  });
+
+const container = player.elements.container;
+
+// Create skip buttons
+const skipLeft = document.createElement('button');
+const skipRight = document.createElement('button');
+
+// Set icons (replace with your image URLs)
+skipLeft.innerHTML = `<img src="https://cdn-icons-png.freepik.com/512/4553/4553697.png" alt="Back" style="width:28px;height:28px;">`;
+skipRight.innerHTML = `<img src="https://cdn-icons-png.freepik.com/512/4553/4553697.png" alt="Forward" style="width:28px;height:28px;">`;
+
+// Common style
+const styleSkipButton = (btn, position) => {
+  Object.assign(btn.style, {
+    position: 'absolute',
+    top: '50%',
+    transform: 'translateY(-50%)',
+    background: '#3a3a3a',
+    border: 'none',
+    borderRadius: '50%',
+    padding: '16px',
+    zIndex: 12,
+    opacity: 0,
+    transition: 'opacity 0.3s',
+    pointerEvents: 'none',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  });
+  btn.style.left = position;
+};
+
+// Position buttons near center
+styleSkipButton(skipLeft, 'calc(50% - 120px)');
+styleSkipButton(skipRight, 'calc(50% + 60px)');
+
+// Append to player
+container.style.position = 'relative';
+container.appendChild(skipLeft);
+container.appendChild(skipRight);
+
+// Click actions
+skipLeft.addEventListener('click', () => {
+  player.currentTime = Math.max(0, player.currentTime - 10);
+  showToast('⏪ 10s');
+});
+skipRight.addEventListener('click', () => {
+  player.currentTime = Math.min(player.duration, player.currentTime + 10);
+  showToast('⏩ 10s');
+});
+
+// Show/hide on interaction or pause
+function showSkipButtons() {
+  skipLeft.style.opacity = '1';
+  skipRight.style.opacity = '1';
+  skipLeft.style.pointerEvents = 'auto';
+  skipRight.style.pointerEvents = 'auto';
+  clearTimeout(skipLeft._timeout);
+  skipLeft._timeout = setTimeout(hideSkipButtons, 700);
+}
+function hideSkipButtons() {
+  skipLeft.style.opacity = '0';
+  skipRight.style.opacity = '0';
+  skipLeft.style.pointerEvents = 'none';
+  skipRight.style.pointerEvents = 'none';
+}
+
+['mousemove', 'touchstart'].forEach(evt =>
+  container.addEventListener(evt, showSkipButtons)
+);
+player.on('pause', showSkipButtons);
+player.on('play', hideSkipButtons);
+
+  function setHighestQuality() {
+    const availableQualities = player.quality?.options;
+    if (availableQualities && availableQualities.length > 0) {
+      const sorted = availableQualities.filter(q => q !== 'auto').sort((a, b) => parseInt(b) - parseInt(a));
+      if (sorted.length > 0) {
+        player.quality = sorted[0];
+        console.log(`Set highest quality: ${sorted[0]}`);
+      }
+    }
+  }
+
+  function attachClassItemListeners() {
+    const classItems = document.querySelectorAll('.class-item');
+    const downloadPdfBtn = document.getElementById('downloadPdfBtn');
+
+    classItems.forEach(item => {
+      if (item._eventListener) item.removeEventListener('click', item._eventListener);
+    });
+
+    classItems.forEach(item => {
+      const listener = () => {
+        const videoId = item.dataset.vid;
+        currentVideoId = videoId;
+        localStorage.setItem('lastSelectedVideo', videoId);
+
+        player.source = {
+          type: 'video',
+          sources: [{ src: videoId, provider: 'youtube' }]
+        };
+
+        const customShareBtn = document.getElementById('customShareBtn');
+        if (customShareBtn) {
+          customShareBtn.addEventListener('click', () => {
+            if (currentVideoId) {
+              const url = `https://www.youtube.com/watch?v=${currentVideoId}`;
+              navigator.clipboard.writeText(url).then(() => alert('Video link copied!'))
+                .catch(() => alert('Copy failed.'));
+            } else alert("No video selected.");
+          });
+        }
+
+        classItems.forEach(i => i.classList.remove('bg-blue-200'));
+        item.classList.add('bg-blue-200');
+
+        const pdfLink = item.dataset.npdf;
+        if (pdfLink) {
+          downloadPdfBtn.href = `https://www.bondipathshala.com.bd/pdf/${pdfLink}`;
+          downloadPdfBtn.classList.remove('hidden');
+        } else {
+          downloadPdfBtn.classList.add('hidden');
+        }
+      };
+      item.addEventListener('click', listener);
+      item._eventListener = listener;
+    });
+  }
+
+  attachClassItemListeners();
+
+  // Load stored videos
+  const storedVideos = JSON.parse(localStorage.getItem('customVideos')) || [];
+  const classListUl = document.getElementById('classList');
+  storedVideos.forEach(video => {
+    const li = document.createElement('li');
+    li.className = 'class-item p-2 rounded hover:bg-blue-100 cursor-pointer';
+    li.dataset.vid = video.id;
+    li.dataset.nname = video.title;
+    li.dataset.npdf = video.pdfLink || '';
+    li.innerHTML = `${video.title}${video.pdfLink ? ` <i class="fas fa-file-pdf text-red-500 ml-2"></i>` : ''}`;
+    classListUl.appendChild(li);
+  });
+  attachClassItemListeners();
+
+  // Resume last watched
+  window.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => {
+      const lastVideoId = localStorage.getItem('lastSelectedVideo');
+      if (lastVideoId) {
+        const lastItem = [...document.querySelectorAll('.class-item')].find(i => i.dataset.vid === lastVideoId);
+        if (lastItem) {
+          lastItem.click();
+          lastItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }
+    }, 3500);
+  });
+
+function showToast(message) {
+  const toast = document.getElementById('playerToast');
+  toast.textContent = message;
+  toast.style.opacity = '1';
+  clearTimeout(toast._hideTimeout);
+  toast._hideTimeout = setTimeout(() => {
+    toast.style.opacity = '0';
+  }, 1500);
+}
+
+  // Download button
+  const downloadEmojiBtn = document.getElementById('downloadEmojiBtn');
+  if (downloadEmojiBtn) {
+    downloadEmojiBtn.addEventListener('click', () => {
+      if (currentVideoId) {
+        window.open(`https://www.youtube.com/watch?v=${currentVideoId}`, '_blank');
+      } else {
+        alert("No video selected");
+      }
+    });
+  }
+
+  // Global keyboard shortcuts like YouTube
+  window.addEventListener('keydown', event => {
+    const tag = event.target.tagName.toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || event.target.isContentEditable) return;
+
+    const key = event.key.toLowerCase();
+switch (key) {
+case 'k':
+case ' ':
+  event.preventDefault();
+  player.togglePlay();
+  showToast(player.playing ? 'Playing' : 'Paused');
+  break;
+
+case 'arrowup':
+  event.preventDefault();
+  player.volume = Math.min(1, player.volume + 0.1);
+  showToast(`Volume: ${(player.volume * 100).toFixed(0)}%`);
+  break;
+
+case 'arrowdown':
+  event.preventDefault();
+  player.volume = Math.max(0, player.volume - 0.1);
+  showToast(`Volume: ${(player.volume * 100).toFixed(0)}%`);
+  break;
+
+case ',':
+  {
+    const current = player.speed;
+    const options = player.config.speed.options;
+    const index = options.indexOf(current);
+    if (index > 0) {
+      player.speed = options[index - 1];
+      showToast(`Speed: ${player.speed.toFixed(2)}x`);
+    }
+  }
+  break;
+
+case '.':
+  {
+    const current = player.speed;
+    const options = player.config.speed.options;
+    const index = options.indexOf(current);
+    if (index < options.length - 1) {
+      player.speed = options[index + 1];
+      showToast(`Speed: ${player.speed.toFixed(2)}x`);
+    }
+  }
+  break;
+
+case 'arrowleft':
+  player.currentTime = Math.max(0, player.currentTime - 5);
+  showToast(`⏪ -5s`);
+  break;
+
+case 'arrowright':
+  player.currentTime = Math.min(player.duration, player.currentTime + 5);
+  showToast(`⏩ +5s`);
+  break;
+
+case 'j':
+  player.currentTime = Math.max(0, player.currentTime - 10);
+  showToast(`⏪ -10s`);
+  break;
+
+case 'l':
+  player.currentTime = Math.min(player.duration, player.currentTime + 10);
+  showToast(`⏩ +10s`);
+  break;
+
+    }
+  });
+
+  // Save time every 10s
+  setInterval(() => {
+    if (player && currentVideoId && !player.paused) {
+      const progressKey = `videoProgress_${currentVideoId}`;
+      localStorage.setItem(progressKey, player.currentTime);
+    }
+  }, 10000);
+
+  // Resume time when ready
+  player.on('ready', () => {
+    setHighestQuality();
+    if (currentVideoId) {
+      const progressKey = `videoProgress_${currentVideoId}`;
+      const savedTime = parseFloat(localStorage.getItem(progressKey));
+      if (!isNaN(savedTime)) {
+        player.currentTime = savedTime;
+      }
+    }
+  });
+
+  player.on('sourcechange', () => {
+    setTimeout(() => {
+      setHighestQuality();
+      if (currentVideoId) {
+        const progressKey = `videoProgress_${currentVideoId}`;
+        const savedTime = parseFloat(localStorage.getItem(progressKey));
+        if (!isNaN(savedTime)) {
+          player.currentTime = savedTime;
+        }
+      }
+    }, 500);
+  });
+  
+  // Create help button
+const helpBtn = document.createElement('button');
+helpBtn.id = 'helpBtn';
+helpBtn.textContent = '?';
+Object.assign(helpBtn.style, {
+  position: 'fixed',
+  bottom: '20px',
+  right: '20px',
+  width: '40px',
+  height: '40px',
+  borderRadius: '50%',
+  backgroundColor: '#1e40af', // blue-800 dark
+  color: 'white',
+  border: 'none',
+  fontSize: '24px',
+  cursor: 'pointer',
+  boxShadow: '0 2px 8px rgba(0,0,0,0.7)',
+  zIndex: '99999',
+});
+document.body.appendChild(helpBtn);
+
+// Create help popup
+const helpPopup = document.createElement('div');
+helpPopup.id = 'helpPopup';
+Object.assign(helpPopup.style, {
+  display: 'none',
+  position: 'fixed',
+  bottom: '75px',
+  right: '20px',
+  width: '300px',
+  backgroundColor: '#111827', // gray-900 dark
+  color: 'white',
+  borderRadius: '12px',
+  boxShadow: '0 4px 12px rgba(0,0,0,0.8)',
+  padding: '16px 20px',
+  fontSize: '14px',
+  lineHeight: '1.5',
+  zIndex: '99999',
+  userSelect: 'none',
+  fontFamily: 'Arial, sans-serif',
+});
+helpPopup.innerHTML = `
+  <strong style="font-size:16px;display:block;margin-bottom:10px;">Keyboard Shortcuts</strong>
+  <ul style="padding-left: 18px; margin: 0;">
+    <li><b>K / Space</b>: Play / Pause</li>
+    <li><b>J / ←</b>: Rewind 10s / 5s</li>
+    <li><b>L / →</b>: Forward 10s / 5s</li>
+    <li><b>↑ / ↓</b>: Volume up / down</li>
+    <li><b>M</b>: Mute / Unmute</li>
+    <li><b>F</b>: Fullscreen toggle</li>
+    <li><b>, / .</b>: Speed down / up</li>
+    <li><b>?</b>: Toggle this help</li>
+  </ul>
+`;
+document.body.appendChild(helpPopup);
+
+// Toggle function
+function toggleHelp() {
+  helpPopup.style.display = helpPopup.style.display === 'block' ? 'none' : 'block';
+}
+
+// Button click toggles popup
+helpBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  toggleHelp();
+});
+
+// Click outside closes popup
+document.addEventListener('click', (e) => {
+  if (!helpBtn.contains(e.target) && !helpPopup.contains(e.target)) {
+    helpPopup.style.display = 'none';
+  }
+});
+
+// Press ? key toggles popup
+document.addEventListener('keydown', (e) => {
+  if (e.key === '?') {
+    toggleHelp();
+  }
+});
+
+const playerElement = document.getElementById('player'); // your Plyr container
+
+let lastTapTime = 0;
+let lastTapX = 0;
+
+playerElement.addEventListener('touchend', (e) => {
+  const currentTime = Date.now();
+  const tapX = e.changedTouches[0].clientX;
+
+  // Check for double tap within 300ms and close horizontal position (100px)
+  if (currentTime - lastTapTime < 300 && Math.abs(tapX - lastTapX) < 100) {
+    const width = playerElement.clientWidth;
+    const tapSide = tapX < width / 2 ? 'left' : 'right';
+
+    if (tapSide === 'left') {
+      player.currentTime = Math.max(0, player.currentTime - 10);
+      showToast('⏪ 10s');
+    } else {
+      player.currentTime = Math.min(player.duration, player.currentTime + 10);
+      showToast('⏩ 10s');
+    }
+    lastTapTime = 0; // reset to avoid triple tap
+  } else {
+    lastTapTime = currentTime;
+    lastTapX = tapX;
+  }
+});
+
+// Optional: desktop double click support
+playerElement.addEventListener('dblclick', (e) => {
+  const rect = playerElement.getBoundingClientRect();
+  const clickX = e.clientX - rect.left;
+  const width = playerElement.clientWidth;
+
+  if (clickX < width / 2) {
+    player.currentTime = Math.max(0, player.currentTime - 10);
+    showToast('⏪ 10s');
+  } else {
+    player.currentTime = Math.min(player.duration, player.currentTime + 10);
+    showToast('⏩ 10s');
+  }
+});
+
+
+
+</script>
+
+<div id="playerToast"
+     style="position: fixed; bottom: 10%; left: 50%; transform: translateX(-50%);
+            background-color: rgba(0, 0, 0, 0.8); color: white;
+            padding: 10px 20px; border-radius: 8px;
+            font-size: 16px; opacity: 0; pointer-events: none;
+            transition: opacity 0.3s ease;">
+
+</body>
+</html>
+
+
