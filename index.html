@@ -1,831 +1,262 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-  <!-- Existing scripts for video and XLSX handling -->
-  <script type="text/javascript">
-    var gk_isXlsx = false;
-    var gk_xlsxFileLookup = {};
-    var gk_fileData = {};
-    function filledCell(cell) {
-      return cell !== '' && cell != null;
-    }
-    function loadFileData(filename) {
-      if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
-        try {
-          var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
-          var firstSheetName = workbook.SheetNames[0];
-          var worksheet = workbook.Sheets[firstSheetName];
-          var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
-          var filteredData = jsonData.filter(row => row.some(filledCell));
-          var headerRowIndex = filteredData.findIndex((row, index) =>
-            row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
-          );
-          if (headerRowIndex === -1 || headerRowIndex > 25) headerRowIndex = 0;
-          var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex));
-          csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
-          return csv;
-        } catch (e) {
-          console.error(e);
-          return "";
-        }
-      }
-      return gk_fileData[filename] || "";
-    }
-  </script>
-
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>পড় মন দিয়া</title>
-  <link rel="icon" href="https://cdn-icons-png.freepik.com/512/7856/7856382.png" type="image/png">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
-  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-  <link href="https://cdn.plyr.io/3.7.8/plyr.css" rel="stylesheet">
- <style>
-  /* Base Styles */
-  html, body {
-    margin: 0;
-    padding: 0;
-    /* Use a clean, sans-serif font */
-    font-family: 'Poppins', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background-color: #171717; /* Very dark background */
-    color: #e0e0e0; /* Light text color */
-    min-height: 100vh;
-    -webkit-font-smoothing: antialiased;
-    overflow-x: hidden;
-  }
-
-  /* Header/Navbar Area */
-  header {
-    background-color: #171717; /* Background remains dark */
-    /* Remove padding and margin specific to the header to make it full width */
-    padding: 0;
-    margin: 0;
-    max-width: 100%;
-    width: 100%;
-    box-sizing: border-box;
-    /* Add padding for the content inside */
-    padding: 1rem 2rem; 
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 1px solid #282828; /* Subtle bottom border */
-  }
-  
-  /* Logo/Title area styling (e.g., if there's a title with specific colors) */
-  .logo-text {
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: #f0f0f0;
-    display: flex;
-    align-items: center;
-  }
-
-  /* Main Content Layout (simulating a two-column or split layout) */
-  .main-content-container {
-    display: flex;
-    gap: 1.5rem;
-    padding: 1.5rem 2rem;
-    max-width: 1200px; /* Max width for content */
-    margin: 0 auto;
-  }
-
-  /* Left Panel: Live Class (Video Player and Buttons) */
-  .live-class-panel {
-    flex: 3; /* Takes up more space */
-  }
-
-  /* Right Panel: Class List */
-  .class-list-panel {
-    flex: 1.2; /* Takes up less space */
-    min-width: 300px;
-    background-color: #212121; /* Slightly lighter background for the list container */
-    border-radius: 0.5rem;
-    padding: 1rem;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  }
-
-  /* Card/Container styles (e.g., the video player container) */
-  .bg-white {
-    /* Used for the overall container in the image, e.g., surrounding the player */
-    background-color: #212121 !important; 
-    border: none; /* No border visible in the image */
-    border-radius: 0.5rem;
-    padding: 0; /* Remove internal padding to allow player to touch edges */
-    margin-bottom: 1.5rem;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-  }
-
-  /* Headings for the sections */
-  .section-title {
-    font-size: 1rem;
-    font-weight: 600;
-    color: #55aaff; /* Blue color for the section title (Live Class / Class List) */
-    display: flex;
-    align-items: center;
-    padding: 0 1rem 0.5rem;
-  }
-  
-  .class-list-panel .section-title {
-    padding: 0 0 0.5rem 0; /* Adjust padding for the list panel */
-  }
-
-  /* Text Colors/Sizes */
-  .text-gray-100, .text-lg {
-    color: #e0e0e0 !important;
-  }
-
-  /* Class List Styles */
-  #classList {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-  }
-
-  #classList li {
-    color: #e0e0e0;
-    padding: 0.75rem 1rem;
-    border-radius: 0.4rem;
-    background-color: transparent; /* Default transparent */
-    margin-bottom: 0.3rem;
-    transition: background-color 0.2s ease;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 0.95rem;
-    font-weight: 500;
-  }
-  
-  /* Style for the active/selected class item */
-  #classList li:first-child { 
-    background-color: #0b1f3c; /* Dark blue background for selected item */
-    color: #55aaff; /* Blue text color for selected item */
-  }
-
-  #classList li:not(:first-child):hover {
-    background-color: #2b2b2b; /* Hover for non-selected items */
-  }
-  
-  .list-item-icon {
-    color: #e0e0e0; /* Default icon color */
-  }
-  
-  #classList li:first-child .list-item-icon {
-    color: #55aaff; /* Blue icon color for selected item */
-  }
-
-
-  /* Button Styles (Download PDF & Open on YouTube) */
-  .button-group {
-    display: flex;
-    gap: 1rem;
-    padding: 1rem;
-  }
-
-  .download-pdf-button, .open-youtube-button {
-    flex: 1;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    padding: 0.75rem 1.5rem;
-    border-radius: 0.4rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background-color 0.2s ease;
-    border: none;
-    font-size: 1rem;
-  }
-
-  .download-pdf-button {
-    background-color: #38a169; /* Green background */
-    color: #fff;
-  }
-  
-  .download-pdf-button:hover {
-    background-color: #2f855a;
-  }
-
-  .open-youtube-button {
-    background-color: #55aaff; /* Blue background */
-    color: #fff;
-  }
-  
-  .open-youtube-button:hover {
-    background-color: #4499ee;
-  }
-
-  /* Ensure video player container matches background */
-  .plyr {
-    border-radius: 0.5rem;
-    background-color: #212121; /* Match main container background */
-    overflow: hidden;
-    max-width: 100%;
-  }
-
-  /* Footer/Quote Area */
-  .footer-quotes {
-    font-size: 0.85rem;
-    color: #888;
-    text-align: right; /* Match alignment in the image */
-    margin-top: 0;
-    padding: 0 1rem 1rem;
-  }
-
-  .footer-quotes p {
-    margin: 0.4rem 0;
-  }
-
-  /* Hide elements not present in the image */
-  header {
-    /* Assuming header has the logo and the quote on the right */
-    background-color: #171717;
-  }
-  
-  .bg-blue-200 { /* Not explicitly visible in the final desired look */
-    display: none !important;
-  }
-  
-  .text-red-500 {
-    color: #e74c3c; /* A deep red for contrast, if used */
-  }
-  
-  .shadow-md {
-    /* Use for any remaining general shadow/border elements */
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  }
-  
-  h1, h2, footer { /* Hide or style elements not matching the image's structure */
-    display: none; /* Hide generic headers/footers if they clash with the image */
-  }
-
-  /* Media Queries for Responsiveness */
-  @media (max-width: 1024px) {
-    .main-content-container {
-      flex-direction: column;
-      padding: 1rem;
-    }
-    
-    .live-class-panel, .class-list-panel {
-      flex: none;
-      min-width: unset;
-    }
-  }
-
-  @media (max-width: 768px) {
-    header {
-      padding: 0.75rem 1rem;
-    }
-    
-    .button-group {
-      flex-direction: column;
-    }
-
-    .download-pdf-button, .open-youtube-button {
-      font-size: 0.9rem;
-      padding: 0.6rem 1rem;
-    }
-    
-    .section-title {
-      padding: 0 0.5rem 0.5rem;
-    }
-  }
-</style>
-
-</head>
-<body class="font-sans">
-  <header class="bg-black text-white p-4 flex items-center">
-    <img src="https://bondipathshala.com.bd/files/logo.png" alt="Bondi Pathshala Logo" class="h-10">
-    <h1 class="ml-4 text-xl font-bold">পড়ালেখা করা ভালো</h1>
-  </header>
-
-  <div class="container mx-auto p-4 flex flex-col lg:flex-row gap-4">
-    <div class="lg:w-3/4 bg-white rounded-lg shadow-md p-4">
-      <h2 class="text-lg font-semibold mb-4 text-gray-100">Live Class</h2>
-      <div style="position: relative;"> <!-- Wrapper for player and custom share button -->
-        <div id="player" data-plyr-provider="youtube" data-plyr-embed-id="RUQcm3vIbWo"></div>
-        <button id="customShareBtn" title="Share" style="position: absolute; top: 15px; right: 15px; z-index: 20; background: none; border: none; cursor: pointer; padding: 0;">
-          <i class="fas fa-share-alt" style="color: white; font-size: 20px; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.5));"></i>
-        </button>
-      </div>
-      <div class="flex space-x-4 mt-4">
-        <a id="downloadPdfBtn" href="https://www.bondipathshala.com.bd/pdf/20240527-1716748184-LRH05IsN.pdf" target="_blank" class="inline-block bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
-          <i class="fas fa-file-pdf mr-2"></i>Download PDF
-        </a>
-        <button id="downloadEmojiBtn" class="download-emoji">
-          <i class="fas fa-smile mr-2"></i>Open on YouTube
-        </button>
-      </div>
-    </div>
-
-    <div class="lg:w-1/4 bg-white rounded-lg shadow-md p-4">
-      <button id="openAddVideoBtn" class="w-full bg-black text-white p-2 rounded mb-4 fake-button">
-        <i class="fas fa-plus mr-2"></i>Add New Class
-      </button>
-
-      <h2 class="text-lg font-semibold mb-4 text-gray-100">Class List</h2>
-      <ul id="classList" class="space-y-2 max-h-96 overflow-y-auto">
-       <li class="class-item p-2 rounded hover:bg-blue-100 cursor-pointer" data-vid="BzX25StCOyQ" data-nname="জৈব যৌগের ইতিহাস - পর্ব ০১" data-npdf="20250521-1747767276-zTUgBskf.pdf">
-  জৈব যৌগের ইতিহাস - পর্ব ০১ <i class="fas fa-file-pdf text-red-500 ml-2"></i>
-</li>
-<li class="class-item p-2 rounded hover:bg-blue-100 cursor-pointer" data-vid="a_tsletdZjs" data-nname="জৈব যৌগের ইতিহাস - পর্ব ০২" data-npdf="20250525-1748120787-RXz1vtTE.pdf">
-  জৈব যৌগের ইতিহাস - পর্ব ০২ <i class="fas fa-file-pdf text-red-500 ml-2"></i>
-</li>
-<li class="class-item p-2 rounded hover:bg-blue-100 cursor-pointer" data-vid="9055Ce-Ehd4" data-nname="জৈব যৌগের ইতিহাস  - পর্ব ০৩" data-npdf="20250526-1748209809-b0ltKw7V.pdf">
-  জৈব যৌগের ইতিহাস  - পর্ব ০৩ <i class="fas fa-file-pdf text-red-500 ml-2"></i>
-</li>
-<li class="class-item p-2 rounded hover:bg-blue-100 cursor-pointer" data-vid="CVCW92j2zSw" data-nname="জৈব যৌগ - পর্ব ০৪" data-npdf="20250529-1748503530-x3r34ooq.pdf">
-  জৈব যৌগের ইতিহাস - পর্ব ০৪ <i class="fas fa-file-pdf text-red-500 ml-2"></i>
-</li>
-<li class="class-item p-2 rounded hover:bg-blue-100 cursor-pointer" data-vid="XqMsgz9yTto" data-nname="জৈব যৌগ - পর্ব ০৫" data-npdf="20250530-1748546953-jhRBbO4q.pdf">
-  জৈব যৌগের ইতিহাস - পর্ব ০৫ <i class="fas fa-file-pdf text-red-500 ml-2"></i>
-</li>
-        <li class="class-item p-2 rounded hover:bg-blue-100 cursor-pointer" data-vid="vaF4aRwLdok">
-  জৈব রসায়ন - পর্ব ০৬
-</li>
-<li class="class-item p-2 rounded hover:bg-blue-100 cursor-pointer" data-vid="HqF4pBphbKM" data-nname="সমানুতা - পর্ব ০১" data-npdf="20250620-1750424001-AZt5hROq.pdf">
-  সমানুতা - পর্ব ০১ <i class="fas fa-file-pdf text-red-500 ml-2"></i>
-</li>
-      </ul>
-    </div>
-  </div>
-
-<footer class="bg-gray-900 text-white py-8 px-4 md:px-8 relative overflow-hidden">
-  <!-- Neon Glow Background Effect -->
-  <div class="absolute inset-0 bg-gradient-to-r from-pink-500/20 via-cyan-500/20 to-lime-500/20 animate-pulse"></div>
-  
-  <div class="container mx-auto grid grid-cols-1 md:grid-cols-3 gap-8 text-center md:text-left relative z-10">
-    <!-- Brand/Logo Section -->
-    <div>
-      <h2 class="text-3xl font-extrabold tracking-wider text-lime-400>Bondi Pathshala</h2>
-      <p class="mt-2 text-lime-300 t-medium">Bondi Pathshala</p>
-    </div>
-
-    <!-- Navigation Links -->
-    <div>
-      <h3 class="text-lg font-bold text-lime-400 mb-4 drop-shadow-[0_0_8px_rgba(132,204,22,0.6)]">মন ফ্রেশ থাকলে পড়া বেশি মনে থাকে!</h3>
-      <ul class="space-y-2 text-cyan-300 text-sm">
-  <li>পড়ায় ঝড় তুলো!</li>
-  <li>রঙিন নোট ফাটাও!</li>
-  <li> বই পড়ো!</li>
-      </ul>
-    </div>
-
-    <!-- Social Media & Contact -->
-    <div>
-      <h3 class="text-lg font-bold text-lime-400 mb-4 drop-shadow-[0_0_8px_rgba(132,204,22,0.6)]">Connect With Us</h3>
-      <div class="flex justify-center md:justify-start space-x-4 mb-4">
-        <a href="#" class="hover:scale-110 transform transition-transform duration-300 drop-shadow-[0_0_6px_rgba(236,72,153,0.5)]">
-          <svg class="w-6 h-6 fill-current text-cyan-300 hover:text-pink-400" viewBox="0 0 24 24">
-            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/>
-          </svg>
-        </a>
-        <a href="#" class="hover:scale-110 transform transition-transform duration-300 drop-shadow-[0_0_6px_rgba(236,72,153,0.5)]">
-          <svg class="w-6 h-6 fill-current text-cyan-300 hover:text-pink-400" viewBox="0 0 24 24">
-            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 14v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1h-6v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
-          </svg>
-        </a>
-      </div>
-      <p class="text-cyan-300 text-sm font-medium">Email: <a href="mailto:arnoy799@gmail.com" class="hover:text-pink-400 transition-colors duration-300 hover:drop-shadow-[0_0_6px_rgba(236,72,153,0.5)]">arnoy799@gmail.com</a></p>
-    </div>
-  </div>
-
-  <!-- Bottom Bar -->
-  <div class="border-t border-pink-500/50 mt-8 pt-4 text-center text-cyan-300 text-sm font-medium">
-    <p>© 2025 Bondi Pathshala. All rights reserved.</p>
-  </div>
-</footer>
-
-<script src="https://cdn.plyr.io/3.7.8/plyr.polyfilled.js"></script>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#12181A">
+<title>Ledger</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon.ico" sizes="any">
+<style>
+:root{color-scheme:dark;--bg:#12181A;--card:#1A2326;--ink:#E6ECE9;--mute:#8FA1A3;--line:#2C393C;--acc:#3FB7AE;--me:#3A3317;--bad:#FF8A73}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+button,input,textarea{font:inherit;color:inherit}button{cursor:pointer}[hidden]{display:none!important}
+:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.mute{color:var(--mute)}.small{font-size:14px}.wrap{max-width:720px;margin:0 auto;padding:0 16px}
+.btn{background:var(--acc);color:#0B1517;border:0;border-radius:8px;padding:9px 16px;font-weight:600}
+.btn.ghost{background:none;color:var(--acc);border:1px solid var(--acc)}
+.link{background:none;border:0;color:var(--acc);padding:0}
+input,textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--card)}
+label{display:block;margin:12px 0 4px;font-size:14px;color:var(--mute)}
+.err{color:var(--bad);min-height:22px;margin:10px 0}
+#auth{max-width:360px;margin:12vh auto;padding:0 16px}#auth h1{font-size:36px;margin:0}
+.seg{display:flex;gap:8px;margin:20px 0 4px}.seg button{flex:1;background:none;border:0;border-bottom:2px solid var(--line);padding:10px;color:var(--mute)}
+.seg button.on{color:var(--ink);border-color:var(--acc)}
+header{border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:5}
+header .wrap{display:flex;align-items:center;gap:8px;min-height:56px}
+.brand{font-weight:700;font-size:20px;margin-right:auto}
+.tab{background:none;border:0;padding:8px 14px;border-radius:8px;color:var(--mute);font-weight:600}
+.tab.on{background:var(--card);color:var(--ink)}
+.who{font-size:14px;color:var(--mute);margin-left:8px}
+main{padding:20px 16px 60px}
+.total{font-size:56px;font-weight:700;line-height:1.1}
+.stats{display:flex;gap:10px;margin:14px 0 8px}.stats div{flex:1;background:var(--card);border-radius:10px;padding:10px 12px}.stats b{display:block;font-size:20px}
+.sub{display:flex;gap:18px;margin:0 0 16px;border-bottom:1px solid var(--line)}
+.sub button{background:none;border:0;padding:6px 0;color:var(--mute);border-bottom:2px solid transparent;margin-bottom:-1px}
+.sub button.on{color:var(--ink);border-color:var(--acc)}
+.bar{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px}
+.day{display:flex;align-items:center;gap:10px}
+.step{width:44px;height:44px;border-radius:10px;border:1px solid var(--line);background:none;font-size:22px;line-height:1}
+.step:disabled{opacity:.3;cursor:default}.day .step{width:36px;height:36px;font-size:18px}
+.counter{display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--card);border-radius:12px;padding:14px;margin:12px 0}
+.ctl{display:flex;gap:8px}.ctl input{width:84px;text-align:center;font-size:22px;font-weight:700;padding:8px;-moz-appearance:textfield}
+.ctl input::-webkit-inner-spin-button,.ctl input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.row{display:flex;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
+.row .g{flex:1;min-width:0}.row .p{font-weight:700;font-size:18px}.row .a{display:flex;gap:10px;font-size:14px}
+button.row{width:100%;background:none;border:0;border-bottom:1px solid var(--line);text-align:left}
+button.row:hover{background:var(--card)}.row.me{background:var(--me)}.rk{width:28px;color:var(--mute)}
+.empty{background:var(--card);border-radius:10px;padding:22px;text-align:center;margin-top:10px}
+#wr{min-height:55vh;font:17px/1.6 Georgia,serif;resize:vertical}
+.read{white-space:pre-wrap;font:17px/1.6 Georgia,serif;background:var(--card);border-radius:10px;padding:14px}
+h2{font-size:17px;margin:26px 0 8px}.leg{display:flex;gap:16px;font-size:14px;color:var(--mute);margin:4px 0 14px}
+dialog{background:var(--card);color:var(--ink);border:0;border-radius:12px;padding:20px;width:400px;max-width:calc(100% - 24px)}
+dialog::backdrop{background:rgba(0,0,0,.55)}
+@media(max-width:560px){.who{display:none}.total{font-size:48px}
+dialog{position:fixed;bottom:0;margin:0;max-width:100%;width:100%;border-radius:16px 16px 0 0}}
+</style></head><body>
 <script>
-  const player = new Plyr('#player', {
-    controls: ['play-large', 'rewind', 'play', 'fast-forward', 'progress', 'current-time', 'settings', 'pip', 'fullscreen'],
-    youtube: { noCookie: true, rel: 0, showinfo: 0, modestbranding: 1 },
-    settings: ['quality', 'speed'],
-    speed: { selected: 1, options: [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2] }
-  });
-
-const container = player.elements.container;
-
-// Create skip buttons
-const skipLeft = document.createElement('button');
-const skipRight = document.createElement('button');
-
-// Set icons (replace with your image URLs)
-skipLeft.innerHTML = `<img src="https://cdn-icons-png.freepik.com/512/4553/4553697.png" alt="Back" style="width:28px;height:28px;">`;
-skipRight.innerHTML = `<img src="https://cdn-icons-png.freepik.com/512/4553/4553697.png" alt="Forward" style="width:28px;height:28px;">`;
-
-// Common style
-const styleSkipButton = (btn, position) => {
-  Object.assign(btn.style, {
-    position: 'absolute',
-    top: '50%',
-    transform: 'translateY(-50%)',
-    background: '#3a3a3a',
-    border: 'none',
-    borderRadius: '50%',
-    padding: '16px',
-    zIndex: 12,
-    opacity: 0,
-    transition: 'opacity 0.3s',
-    pointerEvents: 'none',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  });
-  btn.style.left = position;
-};
-
-// Position buttons near center
-styleSkipButton(skipLeft, 'calc(50% - 120px)');
-styleSkipButton(skipRight, 'calc(50% + 60px)');
-
-// Append to player
-container.style.position = 'relative';
-container.appendChild(skipLeft);
-container.appendChild(skipRight);
-
-// Click actions
-skipLeft.addEventListener('click', () => {
-  player.currentTime = Math.max(0, player.currentTime - 10);
-  showToast('⏪ 10s');
-});
-skipRight.addEventListener('click', () => {
-  player.currentTime = Math.min(player.duration, player.currentTime + 10);
-  showToast('⏩ 10s');
-});
-
-// Show/hide on interaction or pause
-function showSkipButtons() {
-  skipLeft.style.opacity = '1';
-  skipRight.style.opacity = '1';
-  skipLeft.style.pointerEvents = 'auto';
-  skipRight.style.pointerEvents = 'auto';
-  clearTimeout(skipLeft._timeout);
-  skipLeft._timeout = setTimeout(hideSkipButtons, 700);
-}
-function hideSkipButtons() {
-  skipLeft.style.opacity = '0';
-  skipRight.style.opacity = '0';
-  skipLeft.style.pointerEvents = 'none';
-  skipRight.style.pointerEvents = 'none';
-}
-
-['mousemove', 'touchstart'].forEach(evt =>
-  container.addEventListener(evt, showSkipButtons)
-);
-player.on('pause', showSkipButtons);
-player.on('play', hideSkipButtons);
-
-  function setHighestQuality() {
-    const availableQualities = player.quality?.options;
-    if (availableQualities && availableQualities.length > 0) {
-      const sorted = availableQualities.filter(q => q !== 'auto').sort((a, b) => parseInt(b) - parseInt(a));
-      if (sorted.length > 0) {
-        player.quality = sorted[0];
-        console.log(`Set highest quality: ${sorted[0]}`);
-      }
-    }
-  }
-
-  function attachClassItemListeners() {
-    const classItems = document.querySelectorAll('.class-item');
-    const downloadPdfBtn = document.getElementById('downloadPdfBtn');
-
-    classItems.forEach(item => {
-      if (item._eventListener) item.removeEventListener('click', item._eventListener);
-    });
-
-    classItems.forEach(item => {
-      const listener = () => {
-        const videoId = item.dataset.vid;
-        currentVideoId = videoId;
-        localStorage.setItem('lastSelectedVideo', videoId);
-
-        player.source = {
-          type: 'video',
-          sources: [{ src: videoId, provider: 'youtube' }]
-        };
-
-        const customShareBtn = document.getElementById('customShareBtn');
-        if (customShareBtn) {
-          customShareBtn.addEventListener('click', () => {
-            if (currentVideoId) {
-              const url = `https://www.youtube.com/watch?v=${currentVideoId}`;
-              navigator.clipboard.writeText(url).then(() => alert('Video link copied!'))
-                .catch(() => alert('Copy failed.'));
-            } else alert("No video selected.");
-          });
-        }
-
-        classItems.forEach(i => i.classList.remove('bg-blue-200'));
-        item.classList.add('bg-blue-200');
-
-        const pdfLink = item.dataset.npdf;
-        if (pdfLink) {
-          downloadPdfBtn.href = `https://www.bondipathshala.com.bd/pdf/${pdfLink}`;
-          downloadPdfBtn.classList.remove('hidden');
-        } else {
-          downloadPdfBtn.classList.add('hidden');
-        }
-      };
-      item.addEventListener('click', listener);
-      item._eventListener = listener;
-    });
-  }
-
-  attachClassItemListeners();
-
-  // Load stored videos
-  const storedVideos = JSON.parse(localStorage.getItem('customVideos')) || [];
-  const classListUl = document.getElementById('classList');
-  storedVideos.forEach(video => {
-    const li = document.createElement('li');
-    li.className = 'class-item p-2 rounded hover:bg-blue-100 cursor-pointer';
-    li.dataset.vid = video.id;
-    li.dataset.nname = video.title;
-    li.dataset.npdf = video.pdfLink || '';
-    li.innerHTML = `${video.title}${video.pdfLink ? ` <i class="fas fa-file-pdf text-red-500 ml-2"></i>` : ''}`;
-    classListUl.appendChild(li);
-  });
-  attachClassItemListeners();
-
-  // Resume last watched
-  window.addEventListener('DOMContentLoaded', () => {
-    setTimeout(() => {
-      const lastVideoId = localStorage.getItem('lastSelectedVideo');
-      if (lastVideoId) {
-        const lastItem = [...document.querySelectorAll('.class-item')].find(i => i.dataset.vid === lastVideoId);
-        if (lastItem) {
-          lastItem.click();
-          lastItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-      }
-    }, 3500);
-  });
-
-function showToast(message) {
-  const toast = document.getElementById('playerToast');
-  toast.textContent = message;
-  toast.style.opacity = '1';
-  clearTimeout(toast._hideTimeout);
-  toast._hideTimeout = setTimeout(() => {
-    toast.style.opacity = '0';
-  }, 1500);
-}
-
-  // Download button
-  const downloadEmojiBtn = document.getElementById('downloadEmojiBtn');
-  if (downloadEmojiBtn) {
-    downloadEmojiBtn.addEventListener('click', () => {
-      if (currentVideoId) {
-        window.open(`https://www.youtube.com/watch?v=${currentVideoId}`, '_blank');
-      } else {
-        alert("No video selected");
-      }
-    });
-  }
-
-  // Global keyboard shortcuts like YouTube
-  window.addEventListener('keydown', event => {
-    const tag = event.target.tagName.toLowerCase();
-    if (tag === 'input' || tag === 'textarea' || event.target.isContentEditable) return;
-
-    const key = event.key.toLowerCase();
-switch (key) {
-case 'k':
-case ' ':
-  event.preventDefault();
-  player.togglePlay();
-  showToast(player.playing ? 'Playing' : 'Paused');
-  break;
-
-case 'arrowup':
-  event.preventDefault();
-  player.volume = Math.min(1, player.volume + 0.1);
-  showToast(`Volume: ${(player.volume * 100).toFixed(0)}%`);
-  break;
-
-case 'arrowdown':
-  event.preventDefault();
-  player.volume = Math.max(0, player.volume - 0.1);
-  showToast(`Volume: ${(player.volume * 100).toFixed(0)}%`);
-  break;
-
-case ',':
-  {
-    const current = player.speed;
-    const options = player.config.speed.options;
-    const index = options.indexOf(current);
-    if (index > 0) {
-      player.speed = options[index - 1];
-      showToast(`Speed: ${player.speed.toFixed(2)}x`);
-    }
-  }
-  break;
-
-case '.':
-  {
-    const current = player.speed;
-    const options = player.config.speed.options;
-    const index = options.indexOf(current);
-    if (index < options.length - 1) {
-      player.speed = options[index + 1];
-      showToast(`Speed: ${player.speed.toFixed(2)}x`);
-    }
-  }
-  break;
-
-case 'arrowleft':
-  player.currentTime = Math.max(0, player.currentTime - 5);
-  showToast(`⏪ -5s`);
-  break;
-
-case 'arrowright':
-  player.currentTime = Math.min(player.duration, player.currentTime + 5);
-  showToast(`⏩ +5s`);
-  break;
-
-case 'j':
-  player.currentTime = Math.max(0, player.currentTime - 10);
-  showToast(`⏪ -10s`);
-  break;
-
-case 'l':
-  player.currentTime = Math.min(player.duration, player.currentTime + 10);
-  showToast(`⏩ +10s`);
-  break;
-
-    }
-  });
-
-  // Save time every 10s
-  setInterval(() => {
-    if (player && currentVideoId && !player.paused) {
-      const progressKey = `videoProgress_${currentVideoId}`;
-      localStorage.setItem(progressKey, player.currentTime);
-    }
-  }, 10000);
-
-  // Resume time when ready
-  player.on('ready', () => {
-    setHighestQuality();
-    if (currentVideoId) {
-      const progressKey = `videoProgress_${currentVideoId}`;
-      const savedTime = parseFloat(localStorage.getItem(progressKey));
-      if (!isNaN(savedTime)) {
-        player.currentTime = savedTime;
-      }
-    }
-  });
-
-  player.on('sourcechange', () => {
-    setTimeout(() => {
-      setHighestQuality();
-      if (currentVideoId) {
-        const progressKey = `videoProgress_${currentVideoId}`;
-        const savedTime = parseFloat(localStorage.getItem(progressKey));
-        if (!isNaN(savedTime)) {
-          player.currentTime = savedTime;
-        }
-      }
-    }, 500);
-  });
-  
-  // Create help button
-const helpBtn = document.createElement('button');
-helpBtn.id = 'helpBtn';
-helpBtn.textContent = '?';
-Object.assign(helpBtn.style, {
-  position: 'fixed',
-  bottom: '20px',
-  right: '20px',
-  width: '40px',
-  height: '40px',
-  borderRadius: '50%',
-  backgroundColor: '#1e40af', // blue-800 dark
-  color: 'white',
-  border: 'none',
-  fontSize: '24px',
-  cursor: 'pointer',
-  boxShadow: '0 2px 8px rgba(0,0,0,0.7)',
-  zIndex: '99999',
-});
-document.body.appendChild(helpBtn);
-
-// Create help popup
-const helpPopup = document.createElement('div');
-helpPopup.id = 'helpPopup';
-Object.assign(helpPopup.style, {
-  display: 'none',
-  position: 'fixed',
-  bottom: '75px',
-  right: '20px',
-  width: '300px',
-  backgroundColor: '#111827', // gray-900 dark
-  color: 'white',
-  borderRadius: '12px',
-  boxShadow: '0 4px 12px rgba(0,0,0,0.8)',
-  padding: '16px 20px',
-  fontSize: '14px',
-  lineHeight: '1.5',
-  zIndex: '99999',
-  userSelect: 'none',
-  fontFamily: 'Arial, sans-serif',
-});
-helpPopup.innerHTML = `
-  <strong style="font-size:16px;display:block;margin-bottom:10px;">Keyboard Shortcuts</strong>
-  <ul style="padding-left: 18px; margin: 0;">
-    <li><b>K / Space</b>: Play / Pause</li>
-    <li><b>J / ←</b>: Rewind 10s / 5s</li>
-    <li><b>L / →</b>: Forward 10s / 5s</li>
-    <li><b>↑ / ↓</b>: Volume up / down</li>
-    <li><b>M</b>: Mute / Unmute</li>
-    <li><b>F</b>: Fullscreen toggle</li>
-    <li><b>, / .</b>: Speed down / up</li>
-    <li><b>?</b>: Toggle this help</li>
-  </ul>
-`;
-document.body.appendChild(helpPopup);
-
-// Toggle function
-function toggleHelp() {
-  helpPopup.style.display = helpPopup.style.display === 'block' ? 'none' : 'block';
-}
-
-// Button click toggles popup
-helpBtn.addEventListener('click', (e) => {
-  e.stopPropagation();
-  toggleHelp();
-});
-
-// Click outside closes popup
-document.addEventListener('click', (e) => {
-  if (!helpBtn.contains(e.target) && !helpPopup.contains(e.target)) {
-    helpPopup.style.display = 'none';
-  }
-});
-
-// Press ? key toggles popup
-document.addEventListener('keydown', (e) => {
-  if (e.key === '?') {
-    toggleHelp();
-  }
-});
-
-const playerElement = document.getElementById('player'); // your Plyr container
-
-let lastTapTime = 0;
-let lastTapX = 0;
-
-playerElement.addEventListener('touchend', (e) => {
-  const currentTime = Date.now();
-  const tapX = e.changedTouches[0].clientX;
-
-  // Check for double tap within 300ms and close horizontal position (100px)
-  if (currentTime - lastTapTime < 300 && Math.abs(tapX - lastTapX) < 100) {
-    const width = playerElement.clientWidth;
-    const tapSide = tapX < width / 2 ? 'left' : 'right';
-
-    if (tapSide === 'left') {
-      player.currentTime = Math.max(0, player.currentTime - 10);
-      showToast('⏪ 10s');
-    } else {
-      player.currentTime = Math.min(player.duration, player.currentTime + 10);
-      showToast('⏩ 10s');
-    }
-    lastTapTime = 0; // reset to avoid triple tap
-  } else {
-    lastTapTime = currentTime;
-    lastTapX = tapX;
-  }
-});
-
-// Optional: desktop double click support
-playerElement.addEventListener('dblclick', (e) => {
-  const rect = playerElement.getBoundingClientRect();
-  const clickX = e.clientX - rect.left;
-  const width = playerElement.clientWidth;
-
-  if (clickX < width / 2) {
-    player.currentTime = Math.max(0, player.currentTime - 10);
-    showToast('⏪ 10s');
-  } else {
-    player.currentTime = Math.min(player.duration, player.currentTime + 10);
-    showToast('⏩ 10s');
-  }
-});
-
-
-
+const SUPABASE_URL = "https://olfvcgjabgciufqoufeq.supabase.co";
+const SUPABASE_KEY = "sb_publishable_34y4AnLFW3bHCMoj6-tyrw_yb2CaGfq";
+const LOGIN_DOMAIN = "gmail.com"; // hidden suffix, never shown or mailed
 </script>
-
-<div id="playerToast"
-     style="position: fixed; bottom: 10%; left: 50%; transform: translateX(-50%);
-            background-color: rgba(0, 0, 0, 0.8); color: white;
-            padding: 10px 20px; border-radius: 8px;
-            font-size: 16px; opacity: 0; pointer-events: none;
-            transition: opacity 0.3s ease;">
-
-</body>
-</html>
-
-
+<div id="auth" hidden>
+ <h1>Ledger</h1><div class="mute">Daily study points, open to everyone.</div>
+ <div class="seg"><button data-act="mode" data-m="in" class="on">Sign in</button><button data-act="mode" data-m="up">Create account</button></div>
+ <label for="au">Username</label><input id="au" autocomplete="username" autocapitalize="none" spellcheck="false">
+ <label for="ap">Password</label><input id="ap" type="password">
+ <div class="err" id="ae" role="alert"></div>
+ <button class="btn" id="ab" data-act="auth" style="width:100%">Sign in</button>
+</div>
+<div id="app" hidden>
+ <header><div class="wrap"><span class="brand">Ledger</span>
+  <button class="tab" id="tMe" data-act="go" data-r="me-today">Me</button>
+  <button class="tab" id="tLb" data-act="go" data-r="board">Leaderboard</button>
+  <span class="who" id="who"></span><button class="link" data-act="signout">Sign out</button></div></header>
+ <main><div class="wrap" id="main"></div></main>
+</div>
+<dialog id="dlg"><form id="frm"><b id="dT">Add exam</b>
+ <label for="xl">Name (optional)</label><input id="xl" maxlength="120">
+ <label for="xv">Exam points</label><input id="xv" type="number" min="0" step="any" inputmode="decimal" required>
+ <label for="xm">MCQs in this exam</label><input id="xm" type="number" min="0" step="1" inputmode="numeric" required>
+ <label for="xc">CQs in this exam</label><input id="xc" type="number" min="0" step="1" inputmode="numeric" required>
+ <label for="xd">Date</label><input id="xd" type="date" required>
+ <p style="margin:14px 0 0">Worth <b id="fp">0</b> points</p><div class="err" id="fe" role="alert"></div>
+ <div style="display:flex;gap:8px;justify-content:flex-end"><button type="button" class="btn ghost" data-act="close">Cancel</button><button class="btn" id="fs">Save exam</button></div></form></dialog>
+<script>
+const $=s=>document.querySelector(s),J=JSON.stringify;
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const clean=m=>/@/.test(m||'')?'That username couldn’t be accepted. Try another.':String(m||'').replace(/e-?mail/gi,'username');
+const n2=x=>String(+(+x).toFixed(2)),iv=s=>Math.max(0,Math.min(100000,Math.floor(+s||0)));
+const today=()=>{const d=new Date();return new Date(d-d.getTimezoneOffset()*6e4).toISOString().slice(0,10)};
+const addDays=(d,n)=>{const t=new Date(d+'T00:00:00Z');t.setUTCDate(t.getUTCDate()+n);return t.toISOString().slice(0,10)};
+const fmt=(d,o)=>new Date(d+'T00:00:00Z').toLocaleDateString('en',{...o,timeZone:'UTC'});
+const fmtDay=d=>fmt(d,{weekday:'short',day:'numeric',month:'short'}),wd=d=>fmt(d,{weekday:'short'});
+let S=null;try{S=JSON.parse(localStorage.getItem('ledger.s')||'null')}catch(e){}
+const fresh=()=>({state:'loading',me:null,board:[],days:{},exams:[],writing:'',day:today(),lb:'today',err:''});
+let D=fresh(),P=null,R='me-today',mode='in',editId=null,dirtyW=false,saveWT=null,pend=null,saveDT=null;
+const keep=s=>{S=s;try{s?localStorage.setItem('ledger.s',J(s)):localStorage.removeItem('ledger.s')}catch(e){}};
+async function raw(path,opt={},tk){
+  const r=await fetch(SUPABASE_URL+path,{...opt,headers:{apikey:SUPABASE_KEY,'Content-Type':'application/json',Authorization:'Bearer '+(tk||SUPABASE_KEY),...(opt.headers||{})}});
+  const t=await r.text();let j=null;try{j=t?JSON.parse(t):null}catch(e){j=t}
+  if(!r.ok){const e=new Error(clean(j&&(j.msg||j.message||j.error_description||j.error)||'Request failed ('+r.status+')'));e.status=r.status;e.body=j;throw e}return j}
+const setSess=j=>keep({access_token:j.access_token,refresh_token:j.refresh_token,expires_at:Date.now()/1000+(j.expires_in||3600),uid:j.user.id});
+async function tok(){if(!S)throw new Error('Signed out');if(S.expires_at-60<Date.now()/1000)setSess(await raw('/auth/v1/token?grant_type=refresh_token',{method:'POST',body:J({refresh_token:S.refresh_token})}));return S.access_token}
+const api=async(p,o)=>raw('/rest/v1/'+p,o,await tok());
+const min={Prefer:'return=minimal'},patch=b=>({method:'PATCH',headers:min,body:J(b)});
+const toMap=rows=>{const m={};(rows||[]).forEach(r=>m[r.day]={mcq:r.mcq,cq:r.cq});return m};
+const scores=()=>api('rpc/ledger_scores',{method:'POST',body:J({d:today()})});
+/* points: MCQ 1, CQ 2.5, exam = its own value; exam MCQs/CQs also count at those rates */
+function dayStats(days,exams,d){const v=days[d]||{mcq:0,cq:0};let mcq=v.mcq,cq=v.cq,ex=0;
+  exams.forEach(e=>{if(e.day===d){mcq+=e.mcq;cq+=e.cq;ex+=+e.value}});return{mcq,cq,ex,points:mcq+cq*2.5+ex}}
+function overall(days,exams){const ds=new Set([...Object.keys(days),...exams.map(e=>e.day)]);const t={mcq:0,cq:0,ex:0,points:0};
+  ds.forEach(d=>{const s=dayStats(days,exams,d);t.mcq+=s.mcq;t.cq+=s.cq;t.ex+=s.ex;t.points+=s.points});return t}
+function ranked(kind){const a=kind==='today';
+  const b=D.board.map(r=>({id:r.id,username:r.username,mcq:+r[a?'d_mcq':'t_mcq'],cq:+r[a?'d_cq':'t_cq'],ex:+r[a?'d_exam':'t_exam'],points:+r[a?'d_points':'t_points']}));
+  b.sort((x,y)=>y.points-x.points||x.username.localeCompare(y.username));b.forEach(r=>r.rank=1+b.filter(z=>z.points>r.points).length);return b}
+const rankOf=(id,k)=>{const r=ranked(k).find(x=>x.id===id);return r?r.rank:'–'};
+async function refresh(silent){
+  if(!silent){D.state='loading';render()}
+  try{const [pr,b,dy,ex]=await Promise.all([api('profiles?select=id,username,writing&id=eq.'+S.uid),scores(),
+    api('ledger_days?select=day,mcq,cq&user_id=eq.'+S.uid+'&limit=3000'),api('ledger_exams?select=*&user_id=eq.'+S.uid+'&order=day.desc,created_at.desc&limit=1000')]);
+    if(!pr.length)throw new Error('Your profile is missing. Sign out and sign in again.');
+    D.me=pr[0];if(!silent)D.writing=pr[0].writing||'';D.board=b||[];D.days=toMap(dy);D.exams=ex||[];D.state='ready'}
+  catch(e){D.state='error';D.err=e.message}
+  render()}
+async function loadBoard(){try{D.board=await scores();if(R==='board')render();else updateNums()}catch(e){}}
+async function loadProfile(id){
+  P={id,state:'loading'};render();
+  try{const [pr,dy,ex]=await Promise.all([api('profiles?select=id,username,writing&id=eq.'+id),api('ledger_days?select=day,mcq,cq&user_id=eq.'+id+'&limit=3000'),api('ledger_exams?select=*&user_id=eq.'+id+'&order=day.desc&limit=1000')]);
+    if(!pr.length)throw new Error('That person was not found.');P={id,state:'ready',username:pr[0].username,writing:pr[0].writing||'',days:toMap(dy),exams:ex||[]}}
+  catch(e){P={id,state:'error',err:e.message}}
+  render()}
+const wait=(st,err)=>st==='loading'?'<div class="empty mute">Loading…</div>':`<div class="empty"><p>Something went wrong: ${esc(err)}</p><button class="btn" data-act="retry">Try again</button></div>`;
+const statRow=t=>`<div class="stats"><div class="mute">MCQs<b>${t.mcq}</b></div><div class="mute">CQs<b>${t.cq}</b></div><div class="mute">Exam points<b>${n2(t.ex)}</b></div></div>`;
+function chart(days,exams){
+  const ds=[];for(let i=6;i>=0;i--)ds.push(addDays(today(),-i));
+  const st=ds.map(d=>dayStats(days,exams,d)),mx=Math.max(10,...st.map(s=>s.points));
+  const W=340,H=170,pb=22,pt=18,bw=28,gap=(W-7*bw)/8;let g=`<line x1="0" x2="${W}" y1="${H-pb}" y2="${H-pb}" stroke="#2C393C"/>`;
+  st.forEach((s,i)=>{const x=gap+i*(bw+gap);let y=H-pb;
+    [[s.mcq,'#3FB7AE'],[s.cq*2.5,'#E0B84A'],[s.ex,'#E07A5F']].forEach(([v,c])=>{const h=v/mx*(H-pb-pt);if(h>0){y-=h;g+=`<rect x="${x}" y="${y}" width="${bw}" height="${h}" fill="${c}"/>`}});
+    g+=`<text x="${x+bw/2}" y="${y-5}" text-anchor="middle" fill="#E6ECE9" font-size="11">${s.points?n2(s.points):''}</text><text x="${x+bw/2}" y="${H-6}" text-anchor="middle" fill="#8FA1A3" font-size="11">${wd(ds[i])}</text>`});
+  return`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Points per day, last 7 days" style="width:100%;height:auto">${g}</svg><div class="leg"><span><b style="color:#3FB7AE">■</b> MCQ</span><span><b style="color:#E0B84A">■</b> CQ</span><span><b style="color:#E07A5F">■</b> Exam</span></div>`}
+function dayRows(list,days,exams,click){
+  if(!list.length)return'<div class="empty mute">Nothing logged yet.</div>';
+  return list.map(d=>{const s=dayStats(days,exams,d),T=click?'button':'div';
+    return`<${T} class="row"${click?` data-act="pick" data-d="${d}"`:''}><span class="g"><b>${fmtDay(d)}</b><div class="mute small">MCQ ${s.mcq} &nbsp;CQ ${s.cq} &nbsp;Exams ${n2(s.ex)}</div></span><span class="p">${n2(s.points)}</span></${T}>`}).join('')}
+const last7=()=>[0,1,2,3,4,5,6].map(i=>addDays(today(),-i));
+const stepper=(k,label,hint,v)=>`<div class="counter"><div><b>${label}</b><div class="mute small">${hint} &nbsp;<span id="h-${k}"></span></div></div><div class="ctl"><button class="step" data-act="step" data-k="${k}" data-n="-1" aria-label="One fewer">−</button><input id="in-${k}" type="number" inputmode="numeric" min="0" step="1" value="${v}" aria-label="${label}"><button class="step" data-act="step" data-k="${k}" data-n="1" aria-label="One more">+</button></div></div>`;
+function todayView(){
+  const d=D.day,v=D.days[d]||{mcq:0,cq:0},isT=d===today(),xs=D.exams.filter(e=>e.day===d);
+  return`<div class="bar"><div class="day"><button class="step" data-act="day" data-n="-1" aria-label="Previous day">‹</button><b>${isT?'Today':fmtDay(d)}</b><button class="step" data-act="day" data-n="1" ${isT?'disabled':''} aria-label="Next day">›</button></div><span class="mute small" id="rk"></span></div>
+   <div class="total" id="dp">0</div><div class="mute">points ${isT?'today':'this day'} &nbsp;overall <b id="ot"></b></div>
+   ${stepper('mcq','MCQs solved','1 point each',v.mcq)}${stepper('cq','CQs written','2.5 points each',v.cq)}
+   <div class="mute small" id="ds">Saves as you type</div>
+   <div class="bar" style="margin-top:22px"><h2 style="margin:0">Exams</h2><button class="btn" data-act="addx">Add exam</button></div>
+   ${xs.length?xs.map(e=>`<div class="row"><div class="g"><b>${esc(e.label||'Exam')}</b><div class="mute small">${n2(e.value)} exam points &nbsp;${e.mcq} MCQ &nbsp;${e.cq} CQ</div></div><div class="p">+${n2(+e.value+e.mcq+e.cq*2.5)}</div><div class="a"><button class="link" data-act="editx" data-id="${e.id}">Edit</button><button class="link" data-act="delx" data-id="${e.id}">Delete</button></div></div>`).join(''):'<p class="mute small">No exams on this day.</p>'}`}
+function meView(sec){
+  if(D.state!=='ready')return wait(D.state,D.err);
+  const tabs=`<div class="sub">${[['today','Today'],['history','History'],['writing','Writing']].map(([k,n])=>`<button class="${sec===k?'on':''}" data-act="go" data-r="me-${k}">${n}</button>`).join('')}</div>`;
+  if(sec==='history')return tabs+`<div class="mute">Last 7 days</div>${chart(D.days,D.exams)}${dayRows(last7(),D.days,D.exams,true)}<h2>Overall</h2>${statRow(overall(D.days,D.exams))}`;
+  if(sec==='writing')return tabs+`<p class="mute">What are you studying? It saves as you type. Everyone can read this, and your whole log too.</p><textarea id="wr" aria-label="What I’m studying">${esc(D.writing)}</textarea><p class="mute small" id="ws">Saved</p>`;
+  return tabs+todayView()}
+function updateNums(){
+  if(D.state!=='ready'||!R.startsWith('me-today'))return;
+  const s=dayStats(D.days,D.exams,D.day),v=D.days[D.day]||{mcq:0,cq:0},t=overall(D.days,D.exams),set=(i,x)=>{const e=$(i);if(e)e.textContent=x};
+  set('#dp',n2(s.points));set('#ot',n2(t.points));set('#h-mcq','= '+n2(v.mcq));set('#h-cq','= '+n2(v.cq*2.5));
+  set('#rk','Today #'+rankOf(D.me.id,'today')+'  Overall #'+rankOf(D.me.id,'all'))}
+function profView(){
+  if(!P||P.state!=='ready')return wait(P?P.state:'loading',P&&P.err);
+  const t=overall(P.days,P.exams),all=[...new Set([...Object.keys(P.days),...P.exams.map(e=>e.day)])].sort().reverse(),td=dayStats(P.days,P.exams,today());
+  return`<button class="link" data-act="go" data-r="board">← Leaderboard</button><h1 style="margin:10px 0 0">${esc(P.username)}</h1>
+   <div class="mute">Overall #${rankOf(P.id,'all')} &nbsp;Today #${rankOf(P.id,'today')}</div>
+   <div class="total">${n2(t.points)}</div><div class="mute">points overall &nbsp;${n2(td.points)} today</div>${statRow(t)}
+   <h2>Last 7 days</h2>${chart(P.days,P.exams)}
+   <h2>What ${esc(P.username)} is studying</h2>${P.writing.trim()?`<div class="read">${esc(P.writing)}</div>`:'<p class="mute">Nothing written yet.</p>'}
+   <h2>Every day logged</h2>${dayRows(all,P.days,P.exams,false)}`}
+function boardView(){
+  if(D.state!=='ready')return wait(D.state,D.err);
+  const k=D.lb,b=ranked(k),me=b.find(r=>r.id===D.me.id);
+  return`<div class="sub"><button class="${k==='today'?'on':''}" data-act="lb" data-m="today">Today</button><button class="${k==='all'?'on':''}" data-act="lb" data-m="all">Overall</button></div>
+   <div class="mute">${k==='today'?'Today':'Overall'}</div><div class="total">#${me?me.rank:'–'}</div><div class="mute" style="margin-bottom:10px">${me?n2(me.points):0} points among ${b.length} ${b.length==1?'person':'people'}</div>
+   ${b.length===1?'<div class="empty" style="margin-bottom:12px">You’re the only one here so far. Share this page’s address and others can join.</div>':''}
+   ${b.map(r=>`<button class="row${r.id===D.me.id?' me':''}" data-act="open" data-id="${r.id}"><span class="rk">${r.rank}</span><span class="g"><b>${esc(r.username)}${r.id===D.me.id?' (you)':''}</b><div class="mute small">MCQ ${r.mcq} &nbsp;CQ ${r.cq} &nbsp;Exams ${n2(r.ex)}</div></span><span class="p">${n2(r.points)}</span></button>`).join('')}`}
+function render(){
+  if(!S){$('#app').hidden=true;$('#auth').hidden=false;return}
+  $('#auth').hidden=true;$('#app').hidden=false;
+  const inMe=R.startsWith('me-');
+  $('#tMe').classList.toggle('on',inMe);$('#tLb').classList.toggle('on',!inMe);
+  $('#who').textContent=D.me?D.me.username:'';
+  $('#main').innerHTML=inMe?meView(R.slice(3)):R.startsWith('u-')?profView():boardView();
+  updateNums()}
+async function saveW(){if(!dirtyW)return;const v=D.writing;
+  try{await api('profiles?id=eq.'+S.uid,patch({writing:v}));if(D.writing===v)dirtyW=false;const s=$('#ws');if(s)s.textContent=dirtyW?'Saving…':'Saved'}
+  catch(e){const s=$('#ws');if(s)s.innerHTML='Could not save: '+esc(e.message)+' <button class="link" data-act="resave">Try again</button>'}}
+async function saveDay(){if(!pend)return;const d=pend,v=D.days[d]||{mcq:0,cq:0};
+  try{await api('ledger_days?on_conflict=user_id,day',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:J({user_id:S.uid,day:d,mcq:v.mcq,cq:v.cq})});
+    const w=D.days[d]||{mcq:0,cq:0};if(pend===d&&w.mcq===v.mcq&&w.cq===v.cq)pend=null;
+    const s=$('#ds');if(s)s.textContent=pend?'Saving…':'Saved';loadBoard()}
+  catch(e){const s=$('#ds');if(s)s.innerHTML='Could not save: '+esc(e.message)+' <button class="link" data-act="resaveD">Try again</button>'}}
+function flush(){if(dirtyW){clearTimeout(saveWT);saveW()}if(pend){clearTimeout(saveDT);saveDay()}}
+function setCount(k,n){const d=D.day;D.days[d]={...(D.days[d]||{mcq:0,cq:0}),[k]:n};pend=d;
+  const s=$('#ds');if(s)s.textContent='Saving…';clearTimeout(saveDT);saveDT=setTimeout(saveDay,600);updateNums()}
+document.addEventListener('input',ev=>{const t=ev.target;
+  if(t.id==='wr'){D.writing=t.value;dirtyW=true;$('#ws').textContent='Saving…';clearTimeout(saveWT);saveWT=setTimeout(saveW,700)}
+  else if(t.id&&t.id.startsWith('in-')&&t.value!=='')setCount(t.id.slice(3),iv(t.value))});
+document.addEventListener('focusout',ev=>{const t=ev.target;if(t.id&&t.id.startsWith('in-')){const k=t.id.slice(3),v=D.days[D.day]||{mcq:0,cq:0};if(t.value==='')setCount(k,0);t.value=(D.days[D.day]||v)[k]}});
+function route(){const h=location.hash.slice(1);R=/^(me-(today|history|writing)|board|u-[0-9a-f-]{36})$/.test(h)?h:'me-today';
+  if(S&&R.startsWith('u-')){const id=R.slice(2);if(D.me&&id===D.me.id)R='me-today';else if(!P||P.id!==id||P.state==='error'){loadProfile(id);return}}
+  render();scrollTo(0,0);if(R==='board'&&D.state==='ready')loadBoard()}
+function go(r){flush();location.hash.slice(1)===r?route():location.hash=r}
+addEventListener('hashchange',route);addEventListener('pagehide',flush);
+const prev=()=>{$('#fp').textContent=n2((+$('#xv').value||0)+iv($('#xm').value)+iv($('#xc').value)*2.5)};
+$('#frm').addEventListener('input',prev);
+function openX(id){
+  editId=id||null;const e=id?D.exams.find(x=>x.id===id):null;
+  $('#dT').textContent=e?'Edit exam':'Add exam';$('#fe').textContent='';
+  $('#xl').value=e?e.label:'';$('#xv').value=e?e.value:15;$('#xm').value=e?e.mcq:0;$('#xc').value=e?e.cq:0;$('#xd').max=today();$('#xd').value=e?e.day:D.day;prev();$('#dlg').showModal()}
+$('#frm').addEventListener('submit',async ev=>{ev.preventDefault();
+  const b={day:$('#xd').value,label:$('#xl').value.trim(),value:+$('#xv').value,mcq:iv($('#xm').value),cq:iv($('#xc').value)};
+  if(!(b.value>=0)){$('#fe').textContent='Exam points can’t be negative.';return}
+  $('#fs').disabled=true;flush();
+  try{editId?await api('ledger_exams?id=eq.'+editId+'&user_id=eq.'+S.uid,patch(b)):await api('ledger_exams',{method:'POST',headers:min,body:J({...b,user_id:S.uid})});
+    $('#dlg').close();D.day=b.day;await refresh(true)}catch(e){$('#fe').textContent='Could not save: '+e.message}
+  $('#fs').disabled=false});
+async function authGo(){
+  const u=$('#au').value.trim(),p=$('#ap').value,E=$('#ae'),B=$('#ab');E.textContent='';
+  if(!/^[A-Za-z0-9_.-]{3,20}$/.test(u)){E.textContent='Usernames are 3–20 characters: letters, numbers, dots, dashes, underscores.';return}
+  if(p.length<6){E.textContent='Passwords need at least 6 characters.';return}
+  B.disabled=true;const em=u.toLowerCase()+'@'+LOGIN_DOMAIN,taken=()=>Object.assign(new Error('taken'),{taken:1});
+  try{
+    if(mode==='up'){let j;
+      try{j=await raw('/auth/v1/signup',{method:'POST',body:J({email:em,password:p})})}
+      catch(e){if(e.body&&(e.body.error_code==='user_already_exists'||/already/i.test(e.message)))throw taken();throw e}
+      if(!j.access_token)throw new Error('Sign-up still needs a confirmation step. Turn it off in the Supabase Auth settings.');
+      setSess(j);
+      try{await api('profiles',{method:'POST',headers:min,body:J({id:S.uid,username:u})})}
+      catch(e){keep(null);if(e.status===409||/duplicate|unique/i.test(e.message))throw taken();throw e}
+    }else{
+      setSess(await raw('/auth/v1/token?grant_type=password',{method:'POST',body:J({email:em,password:p})}));
+      if(!(await api('profiles?select=id&id=eq.'+S.uid)).length)await api('profiles',{method:'POST',headers:min,body:J({id:S.uid,username:u})})}
+    $('#ap').value='';D.me=null;route();refresh()}
+  catch(e){E.textContent=e.taken?'“'+u+'” is taken. Pick another name; what you typed is still here.':/invalid login|credentials/i.test(e.message)?'That username and password don’t match.':e.message}
+  B.disabled=false}
+document.addEventListener('click',async ev=>{
+  const el=ev.target.closest('[data-act]');if(!el)return;const a=el.dataset.act;
+  if(a==='go')go(el.dataset.r);
+  else if(a==='open')go(el.dataset.id===D.me.id?'me-today':'u-'+el.dataset.id);
+  else if(a==='lb'){D.lb=el.dataset.m;render()}
+  else if(a==='day'){flush();const n=addDays(D.day,+el.dataset.n);if(n<=today()){D.day=n;render()}}
+  else if(a==='pick'){D.day=el.dataset.d;go('me-today')}
+  else if(a==='step'){const i=$('#in-'+el.dataset.k),n=iv(+i.value+ +el.dataset.n);i.value=n;setCount(el.dataset.k,n)}
+  else if(a==='addx')openX();else if(a==='editx')openX(el.dataset.id);
+  else if(a==='close')$('#dlg').close();
+  else if(a==='delx'){const e=D.exams.find(x=>x.id===el.dataset.id);
+    if(e&&confirm(`Delete “${e.label||'Exam'}” (${n2(+e.value+e.mcq+e.cq*2.5)} points)?`)){
+      try{await api('ledger_exams?id=eq.'+e.id+'&user_id=eq.'+S.uid,{method:'DELETE'});await refresh(true)}catch(x){alert('Could not delete: '+x.message)}}}
+  else if(a==='retry')R.startsWith('u-')?loadProfile(R.slice(2)):refresh();
+  else if(a==='resave')saveW();else if(a==='resaveD')saveDay();
+  else if(a==='signout'){flush();keep(null);D=fresh();P=null;render()}
+  else if(a==='mode'){mode=el.dataset.m;document.querySelectorAll('[data-act=mode]').forEach(b=>b.classList.toggle('on',b===el));
+    $('#ab').textContent=mode==='up'?'Create account':'Sign in';$('#ae').textContent=''}
+  else if(a==='auth')authGo()});
+['au','ap'].forEach(i=>$('#'+i).addEventListener('keydown',e=>{if(e.key==='Enter')authGo()}));
+(async()=>{route();if(!S)return;try{await tok()}catch(e){keep(null);render();return}await refresh();route()})();
+</script></body></html>
