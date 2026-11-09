@@ -45,6 +45,7 @@ button.row{width:100%;background:none;border:0;border-bottom:1px solid var(--lin
 button.row:hover{background:var(--card)}.row.me{background:var(--me)}.rk{width:28px;color:var(--mute)}
 .empty{background:var(--card);border-radius:10px;padding:22px;text-align:center;margin-top:10px}
 #wr{min-height:55vh;font:17px/1.6 Georgia,serif;resize:vertical}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .read{white-space:pre-wrap;font:17px/1.6 Georgia,serif;background:var(--card);border-radius:10px;padding:14px}
 h2{font-size:17px;margin:26px 0 8px}.leg{display:flex;gap:16px;font-size:14px;color:var(--mute);margin:4px 0 14px}
 dialog{background:var(--card);color:var(--ink);border:0;border-radius:12px;padding:20px;width:400px;max-width:calc(100% - 24px)}
@@ -75,10 +76,10 @@ const LOGIN_DOMAIN = "gmail.com"; // hidden suffix, never shown or mailed
 <dialog id="dlg"><form id="frm"><b id="dT">Add exam</b>
  <label for="xl">Name (optional)</label><input id="xl" maxlength="120">
  <label for="xv">Exam points</label><input id="xv" type="number" min="0" step="any" inputmode="decimal" required>
- <label for="xm">MCQs in this exam</label><input id="xm" type="number" min="0" step="1" inputmode="numeric" required>
- <label for="xc">CQs in this exam</label><input id="xc" type="number" min="0" step="1" inputmode="numeric" required>
+ <label>MCQ marks (optional)</label><div class="two"><input id="xmg" type="number" min="0" step="any" inputmode="decimal" placeholder="Obtained" aria-label="MCQ obtained"><input id="xmo" type="number" min="0" step="any" inputmode="decimal" placeholder="Out of" aria-label="MCQ out of"></div>
+ <label>CQ marks (optional)</label><div class="two"><input id="xcg" type="number" min="0" step="any" inputmode="decimal" placeholder="Obtained" aria-label="CQ obtained"><input id="xco" type="number" min="0" step="any" inputmode="decimal" placeholder="Out of" aria-label="CQ out of"></div>
  <label for="xd">Date</label><input id="xd" type="date" required>
- <p style="margin:14px 0 0">Worth <b id="fp">0</b> points</p><div class="err" id="fe" role="alert"></div>
+ <p style="margin:14px 0 0">Worth <b id="fp">0</b> points</p><div class="mute small">Only the exam points count. MCQ and CQ marks are just for your record.</div><div class="err" id="fe" role="alert"></div>
  <div style="display:flex;gap:8px;justify-content:flex-end"><button type="button" class="btn ghost" data-act="close">Cancel</button><button class="btn" id="fs">Save exam</button></div></form></dialog>
 <script>
 const $=s=>document.querySelector(s),J=JSON.stringify;
@@ -103,9 +104,9 @@ const api=async(p,o)=>raw('/rest/v1/'+p,o,await tok());
 const min={Prefer:'return=minimal'},patch=b=>({method:'PATCH',headers:min,body:J(b)});
 const toMap=rows=>{const m={};(rows||[]).forEach(r=>m[r.day]={mcq:r.mcq,cq:r.cq});return m};
 const scores=()=>api('rpc/ledger_scores',{method:'POST',body:J({d:today()})});
-/* points: MCQ 1, CQ 2.5, exam = its own value; exam MCQs/CQs also count at those rates */
+/* points: MCQ 1, CQ 2.5; an exam counts only its own exam points (its MCQ/CQ marks are just a record) */
 function dayStats(days,exams,d){const v=days[d]||{mcq:0,cq:0};let mcq=v.mcq,cq=v.cq,ex=0;
-  exams.forEach(e=>{if(e.day===d){mcq+=e.mcq;cq+=e.cq;ex+=+e.value}});return{mcq,cq,ex,points:mcq+cq*2.5+ex}}
+  exams.forEach(e=>{if(e.day===d)ex+=+e.value});return{mcq,cq,ex,points:mcq+cq*2.5+ex}}
 function overall(days,exams){const ds=new Set([...Object.keys(days),...exams.map(e=>e.day)]);const t={mcq:0,cq:0,ex:0,points:0};
   ds.forEach(d=>{const s=dayStats(days,exams,d);t.mcq+=s.mcq;t.cq+=s.cq;t.ex+=s.ex;t.points+=s.points});return t}
 function ranked(kind){const a=kind==='today';
@@ -150,7 +151,7 @@ function todayView(){
    ${stepper('mcq','MCQs solved','1 point each',v.mcq)}${stepper('cq','CQs written','2.5 points each',v.cq)}
    <div class="mute small" id="ds">Saves as you type</div>
    <div class="bar" style="margin-top:22px"><h2 style="margin:0">Exams</h2><button class="btn" data-act="addx">Add exam</button></div>
-   ${xs.length?xs.map(e=>`<div class="row"><div class="g"><b>${esc(e.label||'Exam')}</b><div class="mute small">${n2(e.value)} exam points &nbsp;${e.mcq} MCQ &nbsp;${e.cq} CQ</div></div><div class="p">+${n2(+e.value+e.mcq+e.cq*2.5)}</div><div class="a"><button class="link" data-act="editx" data-id="${e.id}">Edit</button><button class="link" data-act="delx" data-id="${e.id}">Delete</button></div></div>`).join(''):'<p class="mute small">No exams on this day.</p>'}`}
+   ${xs.length?xs.map(e=>`<div class="row"><div class="g"><b>${esc(e.label||'Exam')}</b><div class="mute small">${n2(e.value)} exam points${e.mcq_got!=null?' &nbsp;MCQ '+mk(e.mcq_got,e.mcq_of):''}${e.cq_got!=null?' &nbsp;CQ '+mk(e.cq_got,e.cq_of):''}</div></div><div class="p">+${n2(e.value)}</div><div class="a"><button class="link" data-act="editx" data-id="${e.id}">Edit</button><button class="link" data-act="delx" data-id="${e.id}">Delete</button></div></div>`).join(''):'<p class="mute small">No exams on this day.</p>'}`}
 function meView(sec){
   if(D.state!=='ready')return wait(D.state,D.err);
   const tabs=`<div class="sub">${[['today','Today'],['history','History'],['writing','Writing']].map(([k,n])=>`<button class="${sec===k?'on':''}" data-act="go" data-r="me-${k}">${n}</button>`).join('')}</div>`;
@@ -206,15 +207,17 @@ function route(){const h=location.hash.slice(1);R=/^(me-(today|history|writing)|
   render();scrollTo(0,0);if(R==='board'&&D.state==='ready')loadBoard()}
 function go(r){flush();location.hash.slice(1)===r?route():location.hash=r}
 addEventListener('hashchange',route);addEventListener('pagehide',flush);
-const prev=()=>{$('#fp').textContent=n2((+$('#xv').value||0)+iv($('#xm').value)+iv($('#xc').value)*2.5)};
+const prev=()=>{$('#fp').textContent=n2(+$('#xv').value||0)};
+const op=s=>s===''?null:+s,vv=x=>x==null?'':x,mk=(g,o)=>n2(g)+(o==null?'':' / '+n2(o));
 $('#frm').addEventListener('input',prev);
 function openX(id){
   editId=id||null;const e=id?D.exams.find(x=>x.id===id):null;
   $('#dT').textContent=e?'Edit exam':'Add exam';$('#fe').textContent='';
-  $('#xl').value=e?e.label:'';$('#xv').value=e?e.value:15;$('#xm').value=e?e.mcq:0;$('#xc').value=e?e.cq:0;$('#xd').max=today();$('#xd').value=e?e.day:D.day;prev();$('#dlg').showModal()}
+  $('#xl').value=e?e.label:'';$('#xv').value=e?e.value:15;$('#xmg').value=e?vv(e.mcq_got):'';$('#xmo').value=e?vv(e.mcq_of):'';$('#xcg').value=e?vv(e.cq_got):'';$('#xco').value=e?vv(e.cq_of):'';$('#xd').max=today();$('#xd').value=e?e.day:D.day;prev();$('#dlg').showModal()}
 $('#frm').addEventListener('submit',async ev=>{ev.preventDefault();
-  const b={day:$('#xd').value,label:$('#xl').value.trim(),value:+$('#xv').value,mcq:iv($('#xm').value),cq:iv($('#xc').value)};
+  const b={day:$('#xd').value,label:$('#xl').value.trim(),value:+$('#xv').value,mcq_got:op($('#xmg').value),mcq_of:op($('#xmo').value),cq_got:op($('#xcg').value),cq_of:op($('#xco').value)};
   if(!(b.value>=0)){$('#fe').textContent='Exam points can’t be negative.';return}
+  if((b.mcq_got!=null&&b.mcq_of!=null&&b.mcq_got>b.mcq_of)||(b.cq_got!=null&&b.cq_of!=null&&b.cq_got>b.cq_of)){$('#fe').textContent='Obtained can’t be more than “out of”.';return}
   $('#fs').disabled=true;flush();
   try{editId?await api('ledger_exams?id=eq.'+editId+'&user_id=eq.'+S.uid,patch(b)):await api('ledger_exams',{method:'POST',headers:min,body:J({...b,user_id:S.uid})});
     $('#dlg').close();D.day=b.day;await refresh(true)}catch(e){$('#fe').textContent='Could not save: '+e.message}
@@ -249,7 +252,7 @@ document.addEventListener('click',async ev=>{
   else if(a==='addx')openX();else if(a==='editx')openX(el.dataset.id);
   else if(a==='close')$('#dlg').close();
   else if(a==='delx'){const e=D.exams.find(x=>x.id===el.dataset.id);
-    if(e&&confirm(`Delete “${e.label||'Exam'}” (${n2(+e.value+e.mcq+e.cq*2.5)} points)?`)){
+    if(e&&confirm(`Delete “${e.label||'Exam'}” (${n2(e.value)} points)?`)){
       try{await api('ledger_exams?id=eq.'+e.id+'&user_id=eq.'+S.uid,{method:'DELETE'});await refresh(true)}catch(x){alert('Could not delete: '+x.message)}}}
   else if(a==='retry')R.startsWith('u-')?loadProfile(R.slice(2)):refresh();
   else if(a==='resave')saveW();else if(a==='resaveD')saveDay();
