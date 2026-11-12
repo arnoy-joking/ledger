@@ -70,6 +70,8 @@ main{padding:20px 16px 60px}
 button.row{width:100%;background:none;border:0;border-bottom:1px solid var(--line);text-align:left}
 button.row:hover{background:var(--card)}.row.me{background:var(--me)}.rk{width:28px;color:var(--mute)}
 .empty{background:var(--card);border-radius:10px;padding:22px;text-align:center;margin-top:10px}
+.notify{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;margin:8px 0 14px;border-bottom:1px solid var(--line)}
+.notify .small{flex:1}
 #wr{min-height:55vh;font:17px/1.6 Georgia,serif;resize:vertical}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:24px;background:#E6ECE9;color:#12181A;padding:10px 16px;border-radius:10px;z-index:20;max-width:90%;text-align:center}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
@@ -130,6 +132,33 @@ const setSess=j=>keep({access_token:j.access_token,refresh_token:j.refresh_token
 async function tok(){if(!S)throw new Error('Signed out');if(S.expires_at-60<Date.now()/1000)setSess(await raw('/auth/v1/token?grant_type=refresh_token',{method:'POST',body:J({refresh_token:S.refresh_token})}));return S.access_token}
 const api=async(p,o)=>raw('/rest/v1/'+p,o,await tok());
 const min={Prefer:'return=minimal'},patch=b=>({method:'PATCH',headers:min,body:J(b)});
+async function pushConfig(){
+  const r=await fetch(SUPABASE_URL+'/functions/v1/ledger-push-score-change',{headers:{apikey:SUPABASE_KEY,Authorization:'Bearer '+await tok()}});
+  const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'Push notifications are not configured yet.');return j.vapidPublicKey}
+function vapidBytes(k){const p=k+'='.repeat((4-k.length%4)%4),b=p.replace(/-/g,'+').replace(/_/g,'/');return Uint8Array.from(atob(b),c=>c.charCodeAt(0))}
+async function ensurePushSubscription(requestPermission=false){
+  if(!('Notification'in window)||!('serviceWorker'in navigator)||!('PushManager'in window))throw new Error('Push notifications are not supported in this browser.');
+  const key=await pushConfig();if(!key)throw new Error('Push notifications are not configured yet.');
+  let permission=Notification.permission;
+  if(permission==='default'&&requestPermission)permission=await Notification.requestPermission();
+  if(permission!=='granted')throw new Error(permission==='denied'?'Notifications are blocked in browser settings.':'Turn on notification access first.');
+  const reg=await navigator.serviceWorker.register('/sw.js');
+  const sub=await reg.pushManager.getSubscription()||await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:vapidBytes(key)});
+  await api('push_subscriptions?on_conflict=user_id,endpoint',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:J({endpoint:sub.endpoint,subscription:sub.toJSON()})});
+  return sub}
+async function enablePushForProfile(){
+  try{await ensurePushSubscription(true);render();toast('Notifications are on. Choose Notify me for this person.')}catch(e){render();toast(e.message)}}
+async function toggleProfileNotification(){
+  if(!P||!P.notificationsReady)return;
+  try{
+    if(P.notifyEnabled){await api('notification_follows?subscriber_id=eq.'+S.uid+'&followed_user_id=eq.'+P.id,{method:'DELETE',headers:min});P.notifyEnabled=false;toast('Notifications turned off for '+P.username)}
+    else{await ensurePushSubscription(false);await api('notification_follows?on_conflict=subscriber_id,followed_user_id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:J({followed_user_id:P.id})});P.notifyEnabled=true;toast('You’ll be notified when '+P.username+' reaches #1')}
+    render()
+  }catch(e){toast(e.message)}}
+async function notifyScoreChange(day){
+  try{const r=await fetch(SUPABASE_URL+'/functions/v1/ledger-push-score-change',{method:'POST',headers:{apikey:SUPABASE_KEY,Authorization:'Bearer '+await tok(),'Content-Type':'application/json'},body:J({day})});
+    if(!r.ok){const j=await r.json().catch(()=>({}));console.warn('Push check failed:',j.error||r.status)}}
+  catch(e){console.warn('Push check failed:',e.message)}}
 const toMap=rows=>{const m={};(rows||[]).forEach(r=>m[r.day]={mcq:r.mcq,cq:r.cq});return m};
 const scores=()=>api('rpc/ledger_scores',{method:'POST',body:J({d:today()})});
 /* points: MCQ 1, CQ 2.5; an exam counts only its own exam points (its MCQ/CQ marks are just a record) */
@@ -153,7 +182,10 @@ async function loadBoard(){try{D.board=await scores();if(R==='board')render();el
 async function loadProfile(id){
   P={id,state:'loading'};render();
   try{const [pr,dy,ex]=await Promise.all([api('profiles?select=id,username,writing&id=eq.'+id),api('ledger_days?select=day,mcq,cq&user_id=eq.'+id+'&limit=3000'),api('ledger_exams?select=*&user_id=eq.'+id+'&order=day.desc&limit=1000')]);
-    if(!pr.length)throw new Error('That person was not found.');P={id,state:'ready',username:pr[0].username,writing:pr[0].writing||'',days:toMap(dy),exams:ex||[]}}
+    if(!pr.length)throw new Error('That person was not found.');
+    let notificationsReady=false,notifyEnabled=false;
+    if(id!==S.uid){try{const follows=await api('notification_follows?select=followed_user_id&subscriber_id=eq.'+S.uid+'&followed_user_id=eq.'+id);notificationsReady=true;notifyEnabled=follows.length>0}catch(e){console.warn('Notification settings are not set up in Supabase yet.',e.message)}}
+    P={id,state:'ready',username:pr[0].username,writing:pr[0].writing||'',days:toMap(dy),exams:ex||[],notificationsReady,notifyEnabled}}
   catch(e){P={id,state:'error',err:e.message}}
   render()}
 const wait=(st,err)=>st==='loading'?'<div class="empty mute">Loading…</div>':`<div class="empty"><p>Something went wrong: ${esc(err)}</p><button class="btn" data-act="retry">Try again</button></div>`;
@@ -191,11 +223,17 @@ function updateNums(){
   const s=dayStats(D.days,D.exams,D.day),v=D.days[D.day]||{mcq:0,cq:0},t=overall(D.days,D.exams),set=(i,x)=>{const e=$(i);if(e)e.textContent=x};
   set('#dp',n2(s.points));set('#ot',n2(t.points));set('#h-mcq','= '+n2(v.mcq));set('#h-cq','= '+n2(v.cq*2.5));
   set('#rk','Today #'+rankOf(D.me.id,'today')+'  Overall #'+rankOf(D.me.id,'all'))}
+function notificationControl(){
+  if(!P||P.id===D.me.id||!P.notificationsReady)return'';
+  if(!('Notification'in window)||!('serviceWorker'in navigator)||!('PushManager'in window))return'<p class="mute small">Push notifications aren’t supported in this browser.</p>';
+  if(Notification.permission==='denied')return`<div class="notify"><span class="mute small">Notifications are blocked in browser settings.</span>${P.notifyEnabled?'<button class="link" data-act="toggle-notify">Turn off</button>':''}</div>`;
+  if(Notification.permission!=='granted')return`<div class="notify"><span class="mute small">Get an alert if ${esc(P.username)} reaches #1.</span><button class="btn ghost" data-act="enable-push">Turn on</button></div>`;
+  return`<div class="notify"><span class="mute small">Get an alert if ${esc(P.username)} reaches #1.</span><button class="btn ghost" data-act="toggle-notify" aria-pressed="${P.notifyEnabled}">${P.notifyEnabled?'On':'Notify me'}</button></div>`}
 function profView(){
   if(!P||P.state!=='ready')return wait(P?P.state:'loading',P&&P.err);
   const t=overall(P.days,P.exams),td=dayStats(P.days,P.exams,today());
   return`<div class="bar"><button class="link" data-act="go" data-r="board">← Leaderboard</button><button class="btn ghost" data-act="share" data-id="${P.id}">Share picture</button></div><h1 style="margin:10px 0 0">${esc(P.username)}</h1>
-   <div class="mute">Overall #${rankOf(P.id,'all')} &nbsp;Today #${rankOf(P.id,'today')}</div>
+   <div class="mute">Overall #${rankOf(P.id,'all')} &nbsp;Today #${rankOf(P.id,'today')}</div>${notificationControl()}
    <div class="total">${n2(t.points)}</div><div class="mute">points overall &nbsp;${n2(td.points)} today</div>${statRow(t)}
    <h2>Last 7 days</h2>${chart(P.days,P.exams)}
    <h2>What ${esc(P.username)} is studying</h2>${P.writing.trim()?`<div class="read">${esc(P.writing)}</div>`:'<p class="mute">Nothing written yet.</p>'}
@@ -220,6 +258,7 @@ async function saveW(){if(!dirtyW)return;const v=D.writing;
   catch(e){const s=$('#ws');if(s)s.innerHTML='Could not save: '+esc(e.message)+' <button class="link" data-act="resave">Try again</button>'}}
 async function saveDay(){if(!pend)return;const d=pend,v=D.days[d]||{mcq:0,cq:0};
   try{await api('ledger_days?on_conflict=user_id,day',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:J({user_id:S.uid,day:d,mcq:v.mcq,cq:v.cq})});
+    void notifyScoreChange(d);
     const w=D.days[d]||{mcq:0,cq:0};if(pend===d&&w.mcq===v.mcq&&w.cq===v.cq)pend=null;
     const s=$('#ds');if(s)s.textContent=pend?'Saving…':'Saved';loadBoard()}
   catch(e){const s=$('#ds');if(s)s.innerHTML='Could not save: '+esc(e.message)+' <button class="link" data-act="resaveD">Try again</button>'}}
@@ -281,6 +320,7 @@ $('#frm').addEventListener('submit',async ev=>{ev.preventDefault();
   if((b.mcq_got!=null&&b.mcq_of!=null&&b.mcq_got>b.mcq_of)||(b.cq_got!=null&&b.cq_of!=null&&b.cq_got>b.cq_of)){$('#fe').textContent='Obtained can’t be more than “out of”.';return}
   $('#fs').disabled=true;flush();
   try{editId?await api('ledger_exams?id=eq.'+editId+'&user_id=eq.'+S.uid,patch(b)):await api('ledger_exams',{method:'POST',headers:min,body:J({...b,user_id:S.uid})});
+    void notifyScoreChange(b.day);
     $('#dlg').close();D.day=b.day;await refresh(true)}catch(e){$('#fe').textContent='Could not save: '+e.message}
   $('#fs').disabled=false});
 async function authGo(){
@@ -310,12 +350,14 @@ document.addEventListener('click',async ev=>{
   else if(a==='day'){flush();const n=addDays(D.day,+el.dataset.n);if(n<=today()){D.day=n;render()}}
   else if(a==='pick'){D.day=el.dataset.d;go('me-today')}
   else if(a==='share')share(el.dataset.id);
+  else if(a==='enable-push')enablePushForProfile();
+  else if(a==='toggle-notify')toggleProfileNotification();
   else if(a==='step'){const i=$('#in-'+el.dataset.k),n=iv(+i.value+ +el.dataset.n);i.value=n;setCount(el.dataset.k,n)}
   else if(a==='addx')openX();else if(a==='editx')openX(el.dataset.id);
   else if(a==='close')$('#dlg').close();
   else if(a==='delx'){const e=D.exams.find(x=>x.id===el.dataset.id);
     if(e&&confirm(`Delete “${e.label||'Exam'}” (${n2(e.value)} points)?`)){
-      try{await api('ledger_exams?id=eq.'+e.id+'&user_id=eq.'+S.uid,{method:'DELETE'});await refresh(true)}catch(x){alert('Could not delete: '+x.message)}}}
+      try{await api('ledger_exams?id=eq.'+e.id+'&user_id=eq.'+S.uid,{method:'DELETE'});void notifyScoreChange(e.day);await refresh(true)}catch(x){alert('Could not delete: '+x.message)}}}
   else if(a==='retry')R.startsWith('u-')?loadProfile(R.slice(2)):refresh();
   else if(a==='resave')saveW();else if(a==='resaveD')saveDay();
   else if(a==='signout'){flush();keep(null);D=fresh();P=null;render()}
