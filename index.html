@@ -2,6 +2,13 @@
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#12181A">
+<meta name="description" content="Daily study points, open to everyone.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Ledger">
+<meta property="og:description" content="Log daily MCQs, CQs and exams, and see who is leading today and overall.">
+<meta property="og:image" content="https://YOUR-SITE.com/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://YOUR-SITE.com/og.png">
 <title>Ledger</title>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="icon" href="favicon.ico" sizes="any">
@@ -32,7 +39,7 @@ main{padding:20px 16px 60px}
 .sub{display:flex;gap:18px;margin:0 0 16px;border-bottom:1px solid var(--line)}
 .sub button{background:none;border:0;padding:6px 0;color:var(--mute);border-bottom:2px solid transparent;margin-bottom:-1px}
 .sub button.on{color:var(--ink);border-color:var(--acc)}
-.bar{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px}
+.bar{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px}
 .day{display:flex;align-items:center;gap:10px}
 .step{width:44px;height:44px;border-radius:10px;border:1px solid var(--line);background:none;font-size:22px;line-height:1}
 .step:disabled{opacity:.3;cursor:default}.day .step{width:36px;height:36px;font-size:18px}
@@ -45,6 +52,7 @@ button.row{width:100%;background:none;border:0;border-bottom:1px solid var(--lin
 button.row:hover{background:var(--card)}.row.me{background:var(--me)}.rk{width:28px;color:var(--mute)}
 .empty{background:var(--card);border-radius:10px;padding:22px;text-align:center;margin-top:10px}
 #wr{min-height:55vh;font:17px/1.6 Georgia,serif;resize:vertical}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:24px;background:#E6ECE9;color:#12181A;padding:10px 16px;border-radius:10px;z-index:20;max-width:90%;text-align:center}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .read{white-space:pre-wrap;font:17px/1.6 Georgia,serif;background:var(--card);border-radius:10px;padding:14px}
 h2{font-size:17px;margin:26px 0 8px}.leg{display:flex;gap:16px;font-size:14px;color:var(--mute);margin:4px 0 14px}
@@ -73,6 +81,7 @@ const LOGIN_DOMAIN = "gmail.com"; // hidden suffix, never shown or mailed
   <span class="who" id="who"></span><button class="link" data-act="signout">Sign out</button></div></header>
  <main><div class="wrap" id="main"></div></main>
 </div>
+<div class="toast" id="toast" role="status" hidden></div>
 <dialog id="dlg"><form id="frm"><b id="dT">Add exam</b>
  <label for="xl">Name (optional)</label><input id="xl" maxlength="120">
  <label for="xv">Exam points</label><input id="xv" type="number" min="0" step="any" inputmode="decimal" required>
@@ -146,7 +155,7 @@ const last7=()=>[0,1,2,3,4,5,6].map(i=>addDays(today(),-i));
 const stepper=(k,label,hint,v)=>`<div class="counter"><div><b>${label}</b><div class="mute small">${hint} &nbsp;<span id="h-${k}"></span></div></div><div class="ctl"><button class="step" data-act="step" data-k="${k}" data-n="-1" aria-label="One fewer">−</button><input id="in-${k}" type="number" inputmode="numeric" min="0" step="1" value="${v}" aria-label="${label}"><button class="step" data-act="step" data-k="${k}" data-n="1" aria-label="One more">+</button></div></div>`;
 function todayView(){
   const d=D.day,v=D.days[d]||{mcq:0,cq:0},isT=d===today(),xs=D.exams.filter(e=>e.day===d);
-  return`<div class="bar"><div class="day"><button class="step" data-act="day" data-n="-1" aria-label="Previous day">‹</button><b>${isT?'Today':fmtDay(d)}</b><button class="step" data-act="day" data-n="1" ${isT?'disabled':''} aria-label="Next day">›</button></div><span class="mute small" id="rk"></span></div>
+  return`<div class="bar"><div class="day"><button class="step" data-act="day" data-n="-1" aria-label="Previous day">‹</button><b>${isT?'Today':fmtDay(d)}</b><button class="step" data-act="day" data-n="1" ${isT?'disabled':''} aria-label="Next day">›</button></div><span style="display:flex;gap:10px;align-items:center"><span class="mute small" id="rk"></span><button class="btn ghost" data-act="share" data-id="${D.me.id}">Share picture</button></span></div>
    <div class="total" id="dp">0</div><div class="mute">points ${isT?'today':'this day'} &nbsp;overall <b id="ot"></b></div>
    ${stepper('mcq','MCQs solved','1 point each',v.mcq)}${stepper('cq','CQs written','2.5 points each',v.cq)}
    <div class="mute small" id="ds">Saves as you type</div>
@@ -165,13 +174,13 @@ function updateNums(){
   set('#rk','Today #'+rankOf(D.me.id,'today')+'  Overall #'+rankOf(D.me.id,'all'))}
 function profView(){
   if(!P||P.state!=='ready')return wait(P?P.state:'loading',P&&P.err);
-  const t=overall(P.days,P.exams),all=[...new Set([...Object.keys(P.days),...P.exams.map(e=>e.day)])].sort().reverse(),td=dayStats(P.days,P.exams,today());
-  return`<button class="link" data-act="go" data-r="board">← Leaderboard</button><h1 style="margin:10px 0 0">${esc(P.username)}</h1>
+  const t=overall(P.days,P.exams),td=dayStats(P.days,P.exams,today());
+  return`<div class="bar"><button class="link" data-act="go" data-r="board">← Leaderboard</button><button class="btn ghost" data-act="share" data-id="${P.id}">Share picture</button></div><h1 style="margin:10px 0 0">${esc(P.username)}</h1>
    <div class="mute">Overall #${rankOf(P.id,'all')} &nbsp;Today #${rankOf(P.id,'today')}</div>
    <div class="total">${n2(t.points)}</div><div class="mute">points overall &nbsp;${n2(td.points)} today</div>${statRow(t)}
    <h2>Last 7 days</h2>${chart(P.days,P.exams)}
    <h2>What ${esc(P.username)} is studying</h2>${P.writing.trim()?`<div class="read">${esc(P.writing)}</div>`:'<p class="mute">Nothing written yet.</p>'}
-   <h2>Every day logged</h2>${dayRows(all,P.days,P.exams,false)}`}
+   <h2>Day by day</h2>${dayRows(last7(),P.days,P.exams,false)}`}
 function boardView(){
   if(D.state!=='ready')return wait(D.state,D.err);
   const k=D.lb,b=ranked(k),me=b.find(r=>r.id===D.me.id);
@@ -202,6 +211,39 @@ document.addEventListener('input',ev=>{const t=ev.target;
   if(t.id==='wr'){D.writing=t.value;dirtyW=true;$('#ws').textContent='Saving…';clearTimeout(saveWT);saveWT=setTimeout(saveW,700)}
   else if(t.id&&t.id.startsWith('in-')&&t.value!=='')setCount(t.id.slice(3),iv(t.value))});
 document.addEventListener('focusout',ev=>{const t=ev.target;if(t.id&&t.id.startsWith('in-')){const k=t.id.slice(3),v=D.days[D.day]||{mcq:0,cq:0};if(t.value==='')setCount(k,0);t.value=(D.days[D.day]||v)[k]}});
+const ICON='<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><defs><clipPath id="c"><circle cx="32" cy="32" r="32"/></clipPath></defs><circle cx="32" cy="32" r="32" fill="#3FB7AE"/><g clip-path="url(#c)"><polygon points="17,13 47,13 97,63 97,101 67,101 17,51" fill="#0E5A58" opacity=".6"/></g><rect x="17" y="13" width="30" height="38" rx="4" fill="#fff"/><rect x="17" y="13" width="7" height="38" rx="3" fill="#D5DBD5"/><path d="M29 24h13M29 31h13M29 38h9" stroke="#0E5A58" stroke-width="3" stroke-linecap="round"/></svg>';
+let tT=null;const toast=m=>{const e=$('#toast');e.textContent=m;e.hidden=false;clearTimeout(tT);tT=setTimeout(()=>e.hidden=true,4000)};
+const rr=(x,a,b,w,h,r)=>{x.beginPath();x.moveTo(a+r,b);x.arcTo(a+w,b,a+w,b+h,r);x.arcTo(a+w,b+h,a,b+h,r);x.arcTo(a,b+h,a,b,r);x.arcTo(a,b,a+w,b,r);x.closePath()};
+async function scoreCard(name,id,days,exams){
+  const W=1080,H=1350,c=document.createElement('canvas');c.width=W;c.height=H;const x=c.getContext('2d');
+  const F=(w,z)=>w+' '+z+'px system-ui,-apple-system,"Segoe UI",Arial,sans-serif',T=(t,a,b,f,col,al)=>{x.font=f;x.fillStyle=col;x.textAlign=al||'left';x.fillText(t,a,b)};
+  x.fillStyle='#12181A';x.fillRect(0,0,W,H);
+  try{const im=new Image();im.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(ICON);await im.decode();x.drawImage(im,64,64,96,96)}catch(e){}
+  T('Ledger',184,136,F(700,52),'#E6ECE9');
+  const td=dayStats(days,exams,today()),t=overall(days,exams);
+  T(name,64,330,F(700,name.length>14?60:84),'#E6ECE9');
+  T(fmt(today(),{weekday:'long',day:'numeric',month:'long',year:'numeric'}),64,385,F(400,34),'#8FA1A3');
+  T('TODAY',64,500,F(600,30),'#8FA1A3');
+  T(n2(td.points),64,690,F(700,200),'#E6ECE9');
+  T('points',64,750,F(400,40),'#8FA1A3');T('Rank #'+rankOf(id,'today')+' today',1016,750,F(600,40),'#3FB7AE','right');
+  [['MCQ',td.mcq],['CQ',td.cq],['Exam points',n2(td.ex)]].forEach(([l,v],i)=>{const a=64+i*326;x.fillStyle='#1A2326';rr(x,a,810,300,150,18);x.fill();T(String(v),a+24,885,F(700,64),'#E6ECE9');T(l,a+24,935,F(400,28),'#8FA1A3')});
+  T('OVERALL',64,1040,F(600,30),'#8FA1A3');T(n2(t.points)+' points',64,1100,F(700,60),'#E6ECE9');T('Rank #'+rankOf(id,'all'),1016,1100,F(600,40),'#3FB7AE','right');
+  const ds=[];for(let i=6;i>=0;i--)ds.push(addDays(today(),-i));
+  const st=ds.map(d=>dayStats(days,exams,d)),mx=Math.max(10,...st.map(q=>q.points)),bw=96,gap=(952-7*bw)/6,base=1290;
+  st.forEach((q,i)=>{const a=64+i*(bw+gap);let y=base;[[q.mcq,'#3FB7AE'],[q.cq*2.5,'#E0B84A'],[q.ex,'#E07A5F']].forEach(([v,col])=>{const h=v/mx*120;if(h>0){y-=h;x.fillStyle=col;x.fillRect(a,y,bw,h)}});
+    x.fillStyle='#2C393C';x.fillRect(a,base,bw,3);T(wd(ds[i]),a+bw/2,base+34,F(400,24),'#8FA1A3','center')});
+  return new Promise(r=>c.toBlob(r,'image/png'))}
+async function share(id){
+  const mine=D.me&&id===D.me.id,src=mine?{username:D.me.username,days:D.days,exams:D.exams}:P;if(!src||!src.days)return;
+  toast('Making your picture…');
+  try{const blob=await scoreCard(src.username,id,src.days,src.exams),name='ledger-'+src.username+'.png',file=new File([blob],name,{type:'image/png'});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){
+      try{await navigator.share({files:[file],text:src.username+' on Ledger: '+n2(dayStats(src.days,src.exams,today()).points)+' points today',url:location.href.split('#')[0]});$('#toast').hidden=true;return}
+      catch(e){if(e.name==='AbortError'){$('#toast').hidden=true;return}}}
+    let copied=false;try{await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);copied=true}catch(e){}
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();
+    toast(copied?'Picture saved and copied. Paste it into your chat.':'Picture saved. Attach it in your chat.')}
+  catch(e){toast('Could not make the picture: '+e.message)}}
 function route(){const h=location.hash.slice(1);R=/^(me-(today|history|writing)|board|u-[0-9a-f-]{36})$/.test(h)?h:'me-today';
   if(S&&R.startsWith('u-')){const id=R.slice(2);if(D.me&&id===D.me.id)R='me-today';else if(!P||P.id!==id||P.state==='error'){loadProfile(id);return}}
   render();scrollTo(0,0);if(R==='board'&&D.state==='ready')loadBoard()}
@@ -248,6 +290,7 @@ document.addEventListener('click',async ev=>{
   else if(a==='lb'){D.lb=el.dataset.m;render()}
   else if(a==='day'){flush();const n=addDays(D.day,+el.dataset.n);if(n<=today()){D.day=n;render()}}
   else if(a==='pick'){D.day=el.dataset.d;go('me-today')}
+  else if(a==='share')share(el.dataset.id);
   else if(a==='step'){const i=$('#in-'+el.dataset.k),n=iv(+i.value+ +el.dataset.n);i.value=n;setCount(el.dataset.k,n)}
   else if(a==='addx')openX();else if(a==='editx')openX(el.dataset.id);
   else if(a==='close')$('#dlg').close();
