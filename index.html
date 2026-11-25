@@ -80,8 +80,15 @@ main{padding:20px 16px 60px}
 .toggle span:before{content:"";position:absolute;width:20px;height:20px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.15s}
 .toggle input:checked+span{background:var(--acc)}
 .toggle input:checked+span:before{transform:translateX(18px)}
-#app.hide-score #score-block,#app.hide-score #rk{display:none}
+#app.hide-score #score-block,#app.hide-score #rk,#app.hide-score #h-mcq,#app.hide-score #h-cq{display:none}
+#app.hide-score .pts-hint{display:none}
 #app.hide-lb #tLb{display:none}
+#app.hide-counts #in-mcq,#app.hide-counts #in-cq{
+  color:transparent;caret-color:var(--ink);-webkit-text-fill-color:transparent
+}
+#app.hide-counts #in-mcq:focus,#app.hide-counts #in-cq:focus{
+  color:var(--ink);-webkit-text-fill-color:var(--ink)
+}
 .row{display:flex;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
 .row .g{flex:1;min-width:0}.row .p{font-weight:700;font-size:18px}.row .a{display:flex;gap:10px;font-size:14px}
 button.row{width:100%;background:none;border:0;border-bottom:1px solid var(--line);text-align:left}
@@ -136,6 +143,8 @@ const LOGIN_DOMAIN = "gmail.com"; // hidden suffix, never shown or mailed
   <label class="toggle"><input type="checkbox" id="set-hide-lb" data-set="hideLb"><span></span></label></div>
  <div class="settings-row"><div><b>Hide scores & ranks</b><div class="mute small">Keep logging without seeing points or rank</div></div>
   <label class="toggle"><input type="checkbox" id="set-hide-score" data-set="hideScore"><span></span></label></div>
+ <div class="settings-row"><div><b>Hide MCQ / CQ counts</b><div class="mute small">Numbers stay blank; + / − and batch add still work</div></div>
+  <label class="toggle"><input type="checkbox" id="set-hide-counts" data-set="hideCounts"><span></span></label></div>
  <div style="display:flex;justify-content:flex-end;margin-top:16px"><button class="btn" value="close">Done</button></div>
 </form></dialog>
 <script>
@@ -148,10 +157,10 @@ const addDays=(d,n)=>{const t=new Date(d+'T00:00:00Z');t.setUTCDate(t.getUTCDate
 const fmt=(d,o)=>new Date(d+'T00:00:00Z').toLocaleDateString('en',{...o,timeZone:'UTC'});
 const fmtDay=d=>fmt(d,{weekday:'short',day:'numeric',month:'short'}),wd=d=>fmt(d,{weekday:'short'});
 let S=null;try{S=JSON.parse(localStorage.getItem('ledger.s')||'null')}catch(e){}
-const loadSet=()=>{try{return Object.assign({hideLb:false,hideScore:false},JSON.parse(localStorage.getItem('ledger.set')||'{}'))}catch(e){return{hideLb:false,hideScore:false}}};
+const loadSet=()=>{try{return Object.assign({hideLb:false,hideScore:false,hideCounts:false},JSON.parse(localStorage.getItem('ledger.set')||'{}'))}catch(e){return{hideLb:false,hideScore:false,hideCounts:false}}};
 let SET=loadSet();
 const saveSet=()=>{try{localStorage.setItem('ledger.set',J(SET))}catch(e){}};
-const applySet=()=>{const a=$('#app');if(!a)return;a.classList.toggle('hide-lb',!!SET.hideLb);a.classList.toggle('hide-score',!!SET.hideScore);
+const applySet=()=>{const a=$('#app');if(!a)return;a.classList.toggle('hide-lb',!!SET.hideLb);a.classList.toggle('hide-score',!!SET.hideScore);a.classList.toggle('hide-counts',!!SET.hideCounts);
   if(SET.hideLb&&R==='board')go('me-today')};
 const fresh=()=>({state:'loading',me:null,board:[],days:{},exams:[],writing:'',day:today(),lb:'today',err:''});
 let D=fresh(),P=null,R='me-today',mode='in',editId=null,dirtyW=false,saveWT=null,pend=null,saveDT=null;
@@ -235,7 +244,7 @@ function dayRows(list,days,exams,click){
   return list.map(d=>{const s=dayStats(days,exams,d),T=click?'button':'div';
     return`<${T} class="row"${click?` data-act="pick" data-d="${d}"`:''}><span class="g"><b>${fmtDay(d)}</b><div class="mute small">MCQ ${s.mcq} &nbsp;CQ ${s.cq} &nbsp;Exams ${n2(s.ex)}</div></span><span class="p">${n2(s.points)}</span></${T}>`}).join('')}
 const last7=()=>[0,1,2,3,4,5,6].map(i=>addDays(today(),-i));
-const stepper=(k,label,hint,v)=>`<div class="counter"><div><b>${label}</b><div class="mute small">${hint} &nbsp;<span id="h-${k}"></span></div></div><div class="ctl"><button class="step" data-act="step" data-k="${k}" data-n="-1" aria-label="One fewer">−</button><input id="in-${k}" type="number" inputmode="numeric" min="0" step="1" value="${v}" aria-label="${label}"><button class="step" data-act="step" data-k="${k}" data-n="1" aria-label="One more">+</button><span class="addn" title="Add a batch to the current count"><input id="add-${k}" type="number" inputmode="numeric" min="1" step="1" placeholder="+" aria-label="Amount to add to ${label}"><button class="step" data-act="addn" data-k="${k}" aria-label="Add this many">+</button></span></div></div>`;
+const stepper=(k,label,hint,v)=>`<div class="counter"><div><b>${label}</b><div class="mute small"><span class="pts-hint">${hint} &nbsp;<span id="h-${k}"></span></span></div></div><div class="ctl"><button class="step" data-act="step" data-k="${k}" data-n="-1" aria-label="One fewer">−</button><input id="in-${k}" type="number" inputmode="numeric" min="0" step="1" value="${v}" aria-label="${label}"><button class="step" data-act="step" data-k="${k}" data-n="1" aria-label="One more">+</button><span class="addn" title="Add a batch to the current count"><input id="add-${k}" type="number" inputmode="numeric" min="1" step="1" placeholder="+" aria-label="Amount to add to ${label}"><button class="step" data-act="addn" data-k="${k}" aria-label="Add this many">+</button></span></div></div>`;
 function todayView(){
   const d=D.day,v=D.days[d]||{mcq:0,cq:0},isT=d===today(),xs=D.exams.filter(e=>e.day===d);
   return`<div class="bar"><div class="day"><button class="step" data-act="day" data-n="-1" aria-label="Previous day">‹</button><b>${isT?'Today':fmtDay(d)}</b><button class="step" data-act="day" data-n="1" ${isT?'disabled':''} aria-label="Next day">›</button></div><span style="display:flex;gap:10px;align-items:center"><span class="mute small" id="rk"></span><button class="btn ghost" data-act="share" data-id="${D.me.id}">Share picture</button></span></div>
@@ -389,7 +398,7 @@ document.addEventListener('click',async ev=>{
   else if(a==='step'){const i=$('#in-'+el.dataset.k),n=iv(+i.value+ +el.dataset.n);i.value=n;setCount(el.dataset.k,n)}
   else if(a==='addn'){const k=el.dataset.k,add=$('#add-'+k),amt=iv(add&&add.value);if(!amt){if(add)add.focus();return}
     const i=$('#in-'+k),n=iv(+i.value+amt);i.value=n;setCount(k,n);if(add)add.value='';toast('+'+amt+' '+k.toUpperCase())}
-  else if(a==='settings'){const d=$('#settings');$('#set-hide-lb').checked=!!SET.hideLb;$('#set-hide-score').checked=!!SET.hideScore;d.showModal()}
+  else if(a==='settings'){const d=$('#settings');$('#set-hide-lb').checked=!!SET.hideLb;$('#set-hide-score').checked=!!SET.hideScore;$('#set-hide-counts').checked=!!SET.hideCounts;d.showModal()}
   else if(a==='addx')openX();else if(a==='editx')openX(el.dataset.id);
   else if(a==='close')$('#dlg').close();
   else if(a==='delx'){const e=D.exams.find(x=>x.id===el.dataset.id);
